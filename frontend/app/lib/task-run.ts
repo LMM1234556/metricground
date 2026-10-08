@@ -54,6 +54,8 @@ export type TaskRunFailure = {
 
 export type TaskRun = {
   id: string;
+  traceId: string;
+  persistenceRevision: number;
   question: string;
   state: TaskRunState;
   createdAt: string;
@@ -99,6 +101,7 @@ function generatedId(prefix: string) {
 
 export function createTaskRun(input: {
   id?: string;
+  traceId?: string;
   question: string;
   datasetVersions?: DatasetVersion[];
   now?: string;
@@ -107,6 +110,8 @@ export function createTaskRun(input: {
   const initialState: TaskRunState = input.datasetVersions?.length ? "DATA_PROFILED" : "IDLE";
   return {
     id: input.id ?? generatedId("task"),
+    traceId: input.traceId ?? generatedId("trace"),
+    persistenceRevision: 0,
     question: input.question.trim(),
     state: initialState,
     createdAt: at,

@@ -158,6 +158,9 @@ button { cursor:pointer; }
 .task-run-heading small { color:#8794a6; font-size:8px; font-weight:600; }
 .task-run-heading strong { margin-top:2px; color:#33445b; font-size:10.5px; }
 .task-state { gap:5px; padding:5px 8px; border-radius:999px; color:#335985; background:#eef4fb; font-size:8.5px; font-weight:700; }
+.task-run-persistence { display:flex; align-items:center; gap:5px; margin:7px 0 0; padding:6px 8px; border-radius:7px; color:#52657d; background:#f5f8fc; font-size:8px; }
+.task-run-persistence.saved { color:#0f766e; background:#edf9f6; }
+.task-run-persistence.conflict,.task-run-persistence.error { color:#a43a4e; background:#fff1f3; }
 .task-run-actions { gap:6px; }
 .task-run-actions button { display:flex; align-items:center; gap:4px; padding:5px 7px; border:1px solid #ccd9ea; border-radius:7px; color:#46617f; background:#fff; font-size:8px; font-weight:650; }
 .task-run-actions button:hover { border-color:#9eb7db; background:#f5f8fd; }

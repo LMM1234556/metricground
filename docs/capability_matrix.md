@@ -1,6 +1,6 @@
 # MetricGround 当前能力与证据矩阵
 
-> 当前基准日期：2026-09-22
+> 当前基准日期：2026-10-08（v0.2.0）
 > 产品阶段：可用于面试演示和目标用户测试的 MVP，不是生产级企业数据平台。
 
 ## 产品定位
@@ -18,7 +18,7 @@ MetricGround 面向使用 Excel/CSV 完成常见经营分析的初级数据分�
 | 单指标受控计算 | 已完成 | `verify-controlled-execution.mjs`、`verify-core-boundaries.mjs` | 浏览器确定性主计算 + DuckDB-WASM 独立 SQL 复算；业务口径仍需人工确认 |
 | 分组、趋势、Top N | 已完成 | `verify-business-analysis-core.mjs`、`verify-business-analysis.mjs` | 只支持结构化白名单聚合，不执行任意生成代码 |
 | `AnalysisSpec` | 已完成 | `verify-agent-foundation.mjs` | 当前为项目内部协议，不是外部行业标准 |
-| `TaskRun` 状态机 | 已完成 | `verify-agent-runtime.mjs` | 任务尚未持久化到数据库，刷新后不可恢复 |
+| `TaskRun` 状态机与持久化 | 已完成 | `verify-agent-runtime.mjs`、`verify-task-persistence.mjs`、`verify-workspace-recovery.mjs` | D1 保存审计元数据，IndexedDB 保存当前浏览器工作区；跨设备仍需重传原始文件 |
 | 双表/三表受控关联 | 已完成 | `verify-controlled-join.mjs`、`verify-multi-table-ui.mjs`、`verify-three-table-wizard.mjs` | 最多三表；等值单键/双字段复合键；`N:N` 默认禁止 |
 | 关联金额对账 | 已完成常见金额字段 | `verify-join-reconciliation-ui.mjs` | 自动识别常见金额字段名；非常规字段名尚缺人工指定入口 |
 | 证据包导出 | 已完成 | `verify-evidence-package.mjs` | 不含原始数据行；尚无服务端历史审计库 |

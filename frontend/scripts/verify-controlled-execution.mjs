@@ -211,7 +211,8 @@ const checks = {
   completedPlanRemovesStaleNavigation: result.completedPlanText.includes("本次 Agent 任务已完成") && !result.completedPlanFooter.includes("按计划继续"),
   completionGuideHasFinalAction: result.completionGuide.includes("验证完成，请下载交付文件") && result.completionGuide.includes("下载报告并完成"),
   exportShowsCompletionFeedback: result.exportedCompletionGuide.includes("交付文件已下载，本次分析已完成")
-    && result.exportedCompletionGuide.includes("当前任务不会自动保存到历史记录")
+    && result.exportedCompletionGuide.includes("TaskRun 审计记录已持久化")
+    && result.exportedCompletionGuide.includes("本地数据工作区仅保存在当前浏览器")
     && result.completedGuideSteps === 5
     && result.startNewAnalysisVisible,
   definitionChangeInvalidatesOldEvidence: result.completedTraceInvalidatedAfterDefinitionChange,

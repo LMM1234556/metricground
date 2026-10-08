@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
 import {
   AlertCircle, Check, ChevronRight, CircleHelp, FileCheck2, FileSpreadsheet, Gauge,
   LoaderCircle, MessageSquareText, Plus, Send,
@@ -30,6 +30,7 @@ import { approveTaskRun, completeTaskTool, createTaskRunFromPlan, failTaskTool, 
 import type { TaskRun } from "./lib/task-run";
 import { businessFieldLabel, fieldDisplayName, rawFieldName } from "./lib/field-label";
 import { assessQualityImpact, type QualityImpactSummary } from "./lib/quality-impact";
+import { clearWorkspaceSession, loadWorkspaceSession, saveWorkspaceSession } from "./lib/workspace-session";
 
 const trendData = snapshot.monthly.map((row) => ({
   month: row.month.slice(2),
@@ -75,6 +76,40 @@ type EvidenceTab = "口径" | "SQL" | "校验";
 type AnalysisMode = "overview" | "trend" | "combined" | "category" | "delivery" | "unsupported";
 type ProfileView = "画像" | "质量检查" | "清洗方案" | "多表关联" | "指标口径" | "计算执行" | "经营分析";
 type QualityDecision = "approved" | "kept";
+type PersistenceStatus = { status: "idle" | "saving" | "saved" | "conflict" | "error"; message: string };
+
+type WorkspaceSnapshot = {
+  version: 1;
+  savedAt: string;
+  query: string;
+  submittedQuery: string;
+  analysisMode: AnalysisMode;
+  datasetProfile: DatasetProfile | null;
+  relatedProfiles: DatasetProfile[];
+  originalProfile: DatasetProfile | null;
+  cleaningReceipt: CleaningReceipt | null;
+  profileView: ProfileView;
+  qualityDecisions: Record<string, QualityDecision>;
+  metricDraft: MetricDraft | null;
+  metricContract: MetricContract | null;
+  executionQualityImpact: QualityImpactSummary | null;
+  agentResponse: AgentPlanResponse | null;
+  businessAnalysisPlan: AgentPlan | null;
+  taskRun: TaskRun | null;
+  guidanceMode: "guided" | "expert";
+  evidenceExport: EvidenceExportStatus | null;
+  hasJoinedDataset: boolean;
+};
+
+function taskRunContentKey(run: TaskRun) {
+  const input = JSON.stringify(run, (key, value) => key === "persistenceRevision" ? undefined : value);
+  let hash = 2166136261;
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `${run.id}:${(hash >>> 0).toString(16)}`;
+}
 
 function findProfileField(profile: DatasetProfile, patterns: RegExp[]) {
   return profile.columns.find((column) => patterns.some((pattern) => pattern.test(rawFieldName(column.name))))?.name ?? "";
@@ -237,10 +272,117 @@ export default function Home() {
   const [guidanceMode, setGuidanceMode] = useState<"guided" | "expert">("guided");
   const [evidenceExport, setEvidenceExport] = useState<EvidenceExportStatus | null>(null);
   const [hasJoinedDataset, setHasJoinedDataset] = useState(false);
+  const [persistence, setPersistence] = useState<PersistenceStatus>({ status: "idle", message: "" });
   const profileCardRef = useRef<HTMLElement | null>(null);
   const queryInputRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const taskRunRef = useRef<HTMLDivElement | null>(null);
+  const workspaceHydratedRef = useRef(false);
+  const latestTaskRunRef = useRef<TaskRun | null>(null);
+  const persistedTaskContentRef = useRef("");
+  const persistenceQueueRef = useRef(Promise.resolve());
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadWorkspaceSession<WorkspaceSnapshot>().then((snapshot) => {
+      if (cancelled || !snapshot || snapshot.version !== 1) return;
+      setQuery(snapshot.query);
+      setSubmittedQuery(snapshot.submittedQuery);
+      setAnalysisMode(snapshot.analysisMode);
+      setDatasetProfile(snapshot.datasetProfile);
+      setRelatedProfiles(snapshot.relatedProfiles);
+      setOriginalProfile(snapshot.originalProfile);
+      setCleaningReceipt(snapshot.cleaningReceipt);
+      setProfileView(snapshot.profileView);
+      setQualityDecisions(snapshot.qualityDecisions);
+      setMetricDraft(snapshot.metricDraft);
+      setMetricContract(snapshot.metricContract);
+      setExecutionQualityImpact(snapshot.executionQualityImpact);
+      setAgentResponse(snapshot.agentResponse);
+      setBusinessAnalysisPlan(snapshot.businessAnalysisPlan);
+      if (snapshot.taskRun?.traceId && Number.isInteger(snapshot.taskRun.persistenceRevision)) {
+        setTaskRun(snapshot.taskRun);
+        latestTaskRunRef.current = snapshot.taskRun;
+        setPersistence({ status: "saved", message: "已从当前浏览器恢复工作区，正在核对服务端审计版本。" });
+      }
+      setGuidanceMode(snapshot.guidanceMode);
+      setEvidenceExport(snapshot.evidenceExport);
+      setHasJoinedDataset(snapshot.hasJoinedDataset);
+    }).catch((error) => {
+      if (!cancelled) setPersistence({ status: "error", message: `本地工作区恢复失败：${error instanceof Error ? error.message : "未知错误"}` });
+    }).finally(() => { if (!cancelled) workspaceHydratedRef.current = true; });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    latestTaskRunRef.current = taskRun;
+    if (!workspaceHydratedRef.current) return;
+    const timer = window.setTimeout(() => {
+      if (!datasetProfile && !taskRun) {
+        void clearWorkspaceSession();
+        return;
+      }
+      const snapshot: WorkspaceSnapshot = {
+        version: 1, savedAt: new Date().toISOString(), query, submittedQuery, analysisMode,
+        datasetProfile, relatedProfiles, originalProfile, cleaningReceipt, profileView,
+        qualityDecisions, metricDraft, metricContract, executionQualityImpact, agentResponse,
+        businessAnalysisPlan, taskRun, guidanceMode, evidenceExport, hasJoinedDataset,
+      };
+      void saveWorkspaceSession(snapshot).catch((error) => {
+        setPersistence({ status: "error", message: `浏览器工作区保存失败：${error instanceof Error ? error.message : "可能已超出存储配额"}` });
+      });
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [query, submittedQuery, analysisMode, datasetProfile, relatedProfiles, originalProfile, cleaningReceipt,
+    profileView, qualityDecisions, metricDraft, metricContract, executionQualityImpact, agentResponse,
+    businessAnalysisPlan, taskRun, guidanceMode, evidenceExport, hasJoinedDataset]);
+
+  useEffect(() => {
+    latestTaskRunRef.current = taskRun;
+    if (!workspaceHydratedRef.current || !taskRun) return;
+    const timer = window.setTimeout(() => {
+      persistenceQueueRef.current = persistenceQueueRef.current.then(async () => {
+        const candidate = latestTaskRunRef.current;
+        if (!candidate) return;
+        const contentKey = taskRunContentKey(candidate);
+        if (contentKey === persistedTaskContentRef.current) return;
+        setPersistence({ status: "saving", message: "正在保存 TaskRun 审计记录…" });
+        try {
+          const response = await fetch("/api/task-runs", {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              "Idempotency-Key": contentKey,
+              "X-Trace-Id": candidate.traceId,
+            },
+            body: JSON.stringify(candidate),
+          });
+          const result = await response.json() as { run?: TaskRun; current?: TaskRun; error?: string };
+          if (response.status === 409) {
+            if (result.current && result.current.updatedAt === candidate.updatedAt) {
+              setTaskRun((current) => current?.id === candidate.id
+                ? { ...current, persistenceRevision: result.current!.persistenceRevision }
+                : current);
+              persistedTaskContentRef.current = contentKey;
+              setPersistence({ status: "saved", message: `TaskRun 已保存（版本 ${result.current.persistenceRevision}）。` });
+              return;
+            }
+            setPersistence({ status: "conflict", message: "检测到另一页面写入了更新版本；已停止覆盖，请刷新后核对审计记录。" });
+            return;
+          }
+          if (!response.ok || !result.run) throw new Error(result.error ?? `HTTP ${response.status}`);
+          persistedTaskContentRef.current = contentKey;
+          setTaskRun((current) => current?.id === candidate.id
+            ? { ...current, persistenceRevision: result.run!.persistenceRevision }
+            : current);
+          setPersistence({ status: "saved", message: `TaskRun 已持久化（版本 ${result.run.persistenceRevision}）。` });
+        } catch (error) {
+          setPersistence({ status: "error", message: `TaskRun 持久化失败：${error instanceof Error ? error.message : "未知错误"}` });
+        }
+      });
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [taskRun]);
 
   async function loadFile(file: File, sheetName?: string) {
     setIsReadingFile(true);
@@ -310,6 +452,7 @@ export default function Home() {
   }
 
   function clearUploadedFile() {
+    void clearWorkspaceSession();
     setUploadedFile(null);
     setDatasetProfile(null);
     setRelatedProfiles([]);
@@ -1024,6 +1167,7 @@ export default function Home() {
               <div ref={taskRunRef}>
                 <TaskRunTrace
                   run={taskRun}
+                  persistence={persistence}
                   exportStatus={currentEvidenceExport}
                   onExport={handleEvidenceExport}
                   onStartNewAnalysis={startNewAnalysis}

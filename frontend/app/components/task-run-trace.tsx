@@ -34,6 +34,7 @@ function stateIcon(state: TaskRunState) {
 
 type Props = {
   run: TaskRun | null;
+  persistence?: { status: "idle" | "saving" | "saved" | "conflict" | "error"; message: string };
   exportStatus?: EvidenceExportStatus | null;
   onExport?: (format: EvidenceExportFormat, at: string) => TaskRun;
   onStartNewAnalysis?: () => void;
@@ -45,7 +46,7 @@ function exportTimeLabel(value: string) {
   }).format(new Date(value));
 }
 
-export default function TaskRunTrace({ run, exportStatus = null, onExport, onStartNewAnalysis }: Props) {
+export default function TaskRunTrace({ run, persistence, exportStatus = null, onExport, onStartNewAnalysis }: Props) {
   if (!run) return null;
   const completedTools = run.toolCalls.filter((call) => call.status !== "running");
   const currentExport = exportStatus?.taskId === run.id ? exportStatus : null;
@@ -66,12 +67,18 @@ export default function TaskRunTrace({ run, exportStatus = null, onExport, onSta
   return (
     <section className={`task-run-trace state-${run.state.toLowerCase()}`} aria-label="Agent 任务追踪">
       <div className="task-run-heading">
-        <div><ListChecks size={17} /><span><small>TaskRun · {run.id.slice(0, 18)}</small><strong>真实执行轨迹</strong></span></div>
+        <div><ListChecks size={17} /><span><small>TaskRun · {run.id.slice(0, 18)} · trace {run.traceId.slice(0, 14)}</small><strong>真实执行轨迹</strong></span></div>
         <div className="task-run-actions">
           <span className="task-state">{stateIcon(run.state)}{STATE_LABELS[run.state]}</span>
           {run.state !== "COMPLETED" && <button type="button" onClick={() => downloadEvidence("json")}><Download size={12} />导出当前证据</button>}
         </div>
       </div>
+      {persistence && persistence.status !== "idle" && (
+        <p className={`task-run-persistence ${persistence.status}`} role="status">
+          {persistence.status === "saved" ? <Check size={12} /> : persistence.status === "saving" ? <LoaderCircle className="spin" size={12} /> : <AlertCircle size={12} />}
+          {persistence.message}
+        </p>
+      )}
       <div className="task-run-stats">
         <div><span>数据版本</span><strong>{run.datasetVersions.length}</strong></div>
         <div><span>计划步骤</span><strong>{run.plan.length}</strong></div>
@@ -97,7 +104,7 @@ export default function TaskRunTrace({ run, exportStatus = null, onExport, onSta
             <strong>{currentExport ? "交付文件已下载，本次分析已完成" : "验证完成，请下载交付文件"}</strong>
             <small>
               {currentExport
-                ? `${currentExport.format === "markdown" ? "分析报告" : "审计证据"}已于 ${exportTimeLabel(currentExport.at)} 下载。当前任务不会自动保存到历史记录。`
+                ? `${currentExport.format === "markdown" ? "分析报告" : "审计证据"}已于 ${exportTimeLabel(currentExport.at)} 下载。TaskRun 审计记录已持久化；本地数据工作区仅保存在当前浏览器。`
                 : `${run.resultSummary ?? "结果已通过验证"}。建议先下载便于阅读的分析报告，再结束或开始新的分析。`}
             </small>
           </span></div>
