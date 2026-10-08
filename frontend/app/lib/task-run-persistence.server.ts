@@ -8,6 +8,7 @@ const VALID_STATES = new Set<TaskRunState>([
 ]);
 
 let schemaReady: Promise<void> | null = null;
+const LEGACY_ANONYMOUS_OWNER_HASH = "864dd53ed0e8e149ae01cc2b36cdc40ba8e46ffde50c2c9704c9a16f24225e84";
 
 export function taskRunDb(): D1Database {
   if (!env.DB) throw new Error("D1 binding DB is unavailable");
@@ -36,6 +37,21 @@ export function ensureTaskRunSchema(db = taskRunDb()) {
       created_at TEXT NOT NULL
     )`),
     db.prepare("CREATE INDEX IF NOT EXISTS task_run_writes_task_run_id_idx ON task_run_writes(task_run_id)"),
+    db.prepare(`CREATE TABLE IF NOT EXISTS task_run_owners (
+      task_run_id TEXT PRIMARY KEY NOT NULL,
+      owner_hash TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )`),
+    db.prepare(`INSERT OR IGNORE INTO task_run_owners (task_run_id, owner_hash, created_at)
+      SELECT id, ?, created_at FROM task_runs`).bind(LEGACY_ANONYMOUS_OWNER_HASH),
+    db.prepare("CREATE INDEX IF NOT EXISTS task_run_owners_owner_hash_idx ON task_run_owners(owner_hash)"),
+    db.prepare(`CREATE TABLE IF NOT EXISTS api_rate_limits (
+      bucket_key TEXT PRIMARY KEY NOT NULL,
+      request_count INTEGER NOT NULL DEFAULT 1,
+      expires_at INTEGER NOT NULL,
+      updated_at TEXT NOT NULL
+    )`),
+    db.prepare("CREATE INDEX IF NOT EXISTS api_rate_limits_expires_at_idx ON api_rate_limits(expires_at)"),
   ]).then(() => undefined).catch((error) => {
     schemaReady = null;
     throw error;
@@ -65,10 +81,12 @@ type StoredRunRow = {
   trace_id: string;
 };
 
-export async function readTaskRun(id: string, traceId: string, db = taskRunDb()) {
+export async function readTaskRun(id: string, traceId: string, ownerHash: string, db = taskRunDb()) {
   await ensureTaskRunSchema(db);
-  const row = await db.prepare("SELECT payload, revision, trace_id FROM task_runs WHERE id = ?")
-    .bind(id).first<StoredRunRow>();
+  const row = await db.prepare(`SELECT task_runs.payload, task_runs.revision, task_runs.trace_id
+      FROM task_runs INNER JOIN task_run_owners ON task_run_owners.task_run_id = task_runs.id
+      WHERE task_runs.id = ? AND task_run_owners.owner_hash = ?`)
+    .bind(id, ownerHash).first<StoredRunRow>();
   if (!row || row.trace_id !== traceId) return null;
   const parsed = parseTaskRun(JSON.parse(row.payload));
   return parsed ? { ...parsed, persistenceRevision: row.revision } : null;
@@ -78,18 +96,18 @@ export type PersistResult =
   | { kind: "saved" | "replayed"; run: TaskRun }
   | { kind: "conflict"; current: TaskRun | null };
 
-export async function persistTaskRun(run: TaskRun, idempotencyKey: string, db = taskRunDb()): Promise<PersistResult> {
+export async function persistTaskRun(run: TaskRun, idempotencyKey: string, ownerHash: string, db = taskRunDb()): Promise<PersistResult> {
   await ensureTaskRunSchema(db);
   const priorWrite = await db.prepare("SELECT task_run_id, revision FROM task_run_writes WHERE idempotency_key = ?")
     .bind(idempotencyKey).first<{ task_run_id: string; revision: number }>();
   if (priorWrite) {
     if (priorWrite.task_run_id !== run.id) return { kind: "conflict", current: null };
-    const replayed = await readTaskRun(run.id, run.traceId, db);
+    const replayed = await readTaskRun(run.id, run.traceId, ownerHash, db);
     return replayed ? { kind: "replayed", run: replayed } : { kind: "conflict", current: null };
   }
 
   const now = new Date().toISOString();
-  const current = await readTaskRun(run.id, run.traceId, db);
+  const current = await readTaskRun(run.id, run.traceId, ownerHash, db);
   if (!current) {
     if (run.persistenceRevision !== 0) return { kind: "conflict", current: null };
     const stored = { ...run, persistenceRevision: 1 };
@@ -101,6 +119,10 @@ export async function persistTaskRun(run: TaskRun, idempotencyKey: string, db = 
           (id, trace_id, state, question, payload, revision, created_at, updated_at, persisted_at)
           VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)`)
           .bind(run.id, run.traceId, run.state, run.question, payload, run.createdAt, run.updatedAt, now),
+        db.prepare(`INSERT INTO task_run_owners (task_run_id, owner_hash, created_at)
+          SELECT ?, ?, ? WHERE EXISTS (
+            SELECT 1 FROM task_runs WHERE id = ? AND trace_id = ? AND revision = 1 AND payload = ?
+          )`).bind(run.id, ownerHash, now, run.id, run.traceId, payload),
         db.prepare(`INSERT INTO task_run_writes (idempotency_key, task_run_id, revision, created_at)
           SELECT ?, ?, 1, ? WHERE EXISTS (
             SELECT 1 FROM task_runs WHERE id = ? AND trace_id = ? AND revision = 1 AND payload = ?
@@ -110,13 +132,13 @@ export async function persistTaskRun(run: TaskRun, idempotencyKey: string, db = 
       const racedWrite = await db.prepare("SELECT task_run_id FROM task_run_writes WHERE idempotency_key = ?")
         .bind(idempotencyKey).first<{ task_run_id: string }>();
       if (racedWrite?.task_run_id === run.id) {
-        const replayed = await readTaskRun(run.id, run.traceId, db);
+        const replayed = await readTaskRun(run.id, run.traceId, ownerHash, db);
         if (replayed) return { kind: "replayed", run: replayed };
       }
       throw error;
     }
-    if (Number(results[0].meta.changes ?? 0) !== 1 || Number(results[1].meta.changes ?? 0) !== 1) {
-      return { kind: "conflict", current: await readTaskRun(run.id, run.traceId, db) };
+    if (Number(results[0].meta.changes ?? 0) !== 1 || Number(results[1].meta.changes ?? 0) !== 1 || Number(results[2].meta.changes ?? 0) !== 1) {
+      return { kind: "conflict", current: await readTaskRun(run.id, run.traceId, ownerHash, db) };
     }
     return { kind: "saved", run: stored };
   }
@@ -141,13 +163,13 @@ export async function persistTaskRun(run: TaskRun, idempotencyKey: string, db = 
     const racedWrite = await db.prepare("SELECT task_run_id FROM task_run_writes WHERE idempotency_key = ?")
       .bind(idempotencyKey).first<{ task_run_id: string }>();
     if (racedWrite?.task_run_id === run.id) {
-      const replayed = await readTaskRun(run.id, run.traceId, db);
+      const replayed = await readTaskRun(run.id, run.traceId, ownerHash, db);
       if (replayed) return { kind: "replayed", run: replayed };
     }
     throw error;
   }
   if (Number(results[0].meta.changes ?? 0) !== 1 || Number(results[1].meta.changes ?? 0) !== 1) {
-    return { kind: "conflict", current: await readTaskRun(run.id, run.traceId, db) };
+    return { kind: "conflict", current: await readTaskRun(run.id, run.traceId, ownerHash, db) };
   }
   return { kind: "saved", run: stored };
 }

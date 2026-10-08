@@ -8,6 +8,13 @@
       "when": 1791454952952,
       "tag": "0000_lively_blindfold",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1791456896838,
+      "tag": "0001_jittery_thor_girl",
+      "breakpoints": true
     }
   ]
 }

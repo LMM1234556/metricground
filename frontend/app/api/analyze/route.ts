@@ -31,19 +31,19 @@ function ruleFallback(question: string): AnalysisIntent {
 }
 
 export async function POST(request: Request) {
-  let payload: unknown;
-  try {
-    payload = await request.json();
-  } catch {
-    return Response.json({ error: "请求内容不是有效 JSON。" }, { status: 400 });
-  }
+  const guarded = await guardApiRequest(request, { route: "analyze", limit: 30, mutation: true });
+  if ("response" in guarded) return guarded.response;
+  const { context } = guarded;
+  const body = await readJsonBody(request, 16 * 1024);
+  if ("error" in body) return apiJson(context, { error: body.error }, { status: body.status });
+  const payload = body.value;
 
   const question = typeof payload === "object" && payload !== null && "question" in payload
     ? String(payload.question).trim()
     : "";
 
   if (!question || question.length > 500) {
-    return Response.json({ error: "问题不能为空，且不能超过 500 个字符。" }, { status: 400 });
+    return apiJson(context, { error: "问题不能为空，且不能超过 500 个字符。" }, { status: 400 });
   }
 
   const systemPrompt = `你是 MetricGround 的数据分析意图路由器。你只负责选择工具，不计算指标，也不生成 SQL。
@@ -88,14 +88,14 @@ export async function POST(request: Request) {
       throw new Error("Model returned an invalid intent");
     }
 
-    return Response.json({
+    return apiJson(context, {
       intent: parsed.intent,
       source: "ollama",
       model: OLLAMA_MODEL,
       latencyMs: result.total_duration ? Math.round(result.total_duration / 1_000_000) : null,
     });
   } catch {
-    return Response.json({
+    return apiJson(context, {
       intent: ruleFallback(question),
       source: "rule-fallback",
       model: null,
@@ -103,3 +103,4 @@ export async function POST(request: Request) {
     });
   }
 }
+import { apiJson, guardApiRequest, readJsonBody } from "../../lib/api-guard.server";

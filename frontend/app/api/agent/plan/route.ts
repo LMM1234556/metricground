@@ -6,6 +6,7 @@ import {
   inferStrongAnalysisType, keepRelevantFieldBindings, resolveAgentAnalysisType,
 } from "../../../lib/agent-plan";
 import { getAgentProviderCandidates } from "../../../lib/model-provider";
+import { apiJson, guardApiRequest, readJsonBody } from "../../../lib/api-guard.server";
 
 const contextSchema = z.object({
   fileName: z.string().min(1).max(240),
@@ -214,18 +215,18 @@ function enforcePolicyGuards(plan: AgentPlan, question: string): AgentPlan {
 
 export async function POST(request: Request) {
   const startedAt = Date.now();
-  let payload: unknown;
-  try {
-    payload = await request.json();
-  } catch {
-    return Response.json({ error: "请求内容不是有效 JSON。" }, { status: 400 });
-  }
+  const guarded = await guardApiRequest(request, { route: "agent-plan", limit: 60, mutation: true });
+  if ("response" in guarded) return guarded.response;
+  const { context } = guarded;
+  const body = await readJsonBody(request, 256 * 1024);
+  if ("error" in body) return apiJson(context, { error: body.error }, { status: body.status });
+  const payload = body.value;
   const question = typeof payload === "object" && payload !== null && "question" in payload ? String(payload.question).trim() : "";
   const parsedContext = typeof payload === "object" && payload !== null && "dataset" in payload
     ? contextSchema.safeParse(payload.dataset)
     : null;
   if (!question || question.length > 500 || !parsedContext?.success) {
-    return Response.json({ error: "问题或数据画像无效。" }, { status: 400 });
+    return apiJson(context, { error: "问题或数据画像无效。" }, { status: 400 });
   }
   const dataset = parsedContext.data as DatasetAgentContext;
   const strongType = inferStrongAnalysisType(question);
@@ -237,7 +238,7 @@ export async function POST(request: Request) {
       groupField: "",
       timeField: "",
     }, question, dataset), dataset), question);
-    return Response.json({
+    return apiJson(context, {
       plan: policyPlan,
       source: "policy-router",
       model: null,
@@ -293,7 +294,7 @@ analysisType 只能选择：profile 数据画像、quality 数据质量、cleani
           abortSignal: AbortSignal.timeout(45_000),
         });
         if (!submittedPlan) throw new Error("Agent did not submit a plan");
-        return Response.json({
+        return apiJson(context, {
           plan: submittedPlan,
           source: provider.kind === "local" ? "ollama-agent" : "cloud-agent",
           provider: provider.id,
@@ -312,7 +313,7 @@ analysisType 只能选择：profile 数据画像、quality 数据质量、cleani
       providerErrors.push(`${provider.id}: ${error instanceof Error ? error.message : "Unknown agent error"}`);
     }
   }
-  return Response.json({
+  return apiJson(context, {
     plan: enforcePolicyGuards(fallbackPlan(question, dataset), question),
     source: "rule-fallback",
     provider: null,

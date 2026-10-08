@@ -21,3 +21,16 @@ export const taskRunWrites = sqliteTable("task_run_writes", {
   revision: integer("revision").notNull(),
   createdAt: text("created_at").notNull(),
 }, (table) => [index("task_run_writes_task_run_id_idx").on(table.taskRunId)]);
+
+export const taskRunOwners = sqliteTable("task_run_owners", {
+  taskRunId: text("task_run_id").primaryKey(),
+  ownerHash: text("owner_hash").notNull(),
+  createdAt: text("created_at").notNull(),
+}, (table) => [index("task_run_owners_owner_hash_idx").on(table.ownerHash)]);
+
+export const apiRateLimits = sqliteTable("api_rate_limits", {
+  bucketKey: text("bucket_key").primaryKey(),
+  requestCount: integer("request_count").notNull().default(1),
+  expiresAt: integer("expires_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [index("api_rate_limits_expires_at_idx").on(table.expiresAt)]);

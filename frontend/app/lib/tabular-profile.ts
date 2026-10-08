@@ -76,6 +76,18 @@ export type DatasetProfile = {
 };
 
 const EMPTY_VALUES = new Set(["", "null", "undefined", "__null__"]);
+export const MAX_TABULAR_ROWS = 100_000;
+export const MAX_TABULAR_COLUMNS = 200;
+
+function enforceTabularBounds(rows: CellValue[][]) {
+  if (rows.length > MAX_TABULAR_ROWS + 20) {
+    throw new Error(`当前最多处理 ${MAX_TABULAR_ROWS.toLocaleString("en-US")} 行数据。`);
+  }
+  const width = rows.reduce((maximum, row) => Math.max(maximum, row.length), 0);
+  if (width > MAX_TABULAR_COLUMNS) {
+    throw new Error(`当前最多处理 ${MAX_TABULAR_COLUMNS} 列数据。`);
+  }
+}
 
 function isMissing(value: unknown) {
   return value === null
@@ -492,16 +504,25 @@ export async function parseTabularFile(file: File, sheetName?: string): Promise<
   }
 
   if (extension === "csv") {
+    const sample = await file.slice(0, 4096).text();
+    if (sample.includes("\0")) throw new Error("CSV 包含二进制空字节，已拒绝解析。");
     const rows = parseCsv(await file.text());
-    return profileRows(rows, {
+    enforceTabularBounds(rows);
+    const profile = profileRows(rows, {
       fileName: file.name,
       fileSize: file.size,
       fileType: "CSV",
       sheetNames: ["CSV 数据"],
       activeSheet: "CSV 数据",
     });
+    if (profile.rowCount > MAX_TABULAR_ROWS) throw new Error(`当前最多处理 ${MAX_TABULAR_ROWS.toLocaleString("en-US")} 行数据。`);
+    return profile;
   }
 
+  const signature = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+  if (signature.length < 4 || signature[0] !== 0x50 || signature[1] !== 0x4b) {
+    throw new Error("文件扩展名为 XLSX，但内容不是有效的 Excel ZIP 容器。");
+  }
   const { default: readWorkbook } = await import("read-excel-file/browser");
   const sheets = await readWorkbook(file);
   const sheetNames = sheets.map((sheet) => sheet.sheet);
@@ -509,11 +530,14 @@ export async function parseTabularFile(file: File, sheetName?: string): Promise<
   const activeSheet = sheetName && sheetNames.includes(sheetName) ? sheetName : sheetNames[0];
   const rows = sheets.find((sheet) => sheet.sheet === activeSheet)?.data as CellValue[][] | undefined;
   if (!rows) throw new Error(`无法读取工作表“${activeSheet}”。`);
-  return profileRows(rows, {
+  enforceTabularBounds(rows);
+  const profile = profileRows(rows, {
     fileName: file.name,
     fileSize: file.size,
     fileType: "Excel",
     sheetNames,
     activeSheet,
   });
+  if (profile.rowCount > MAX_TABULAR_ROWS) throw new Error(`当前最多处理 ${MAX_TABULAR_ROWS.toLocaleString("en-US")} 行数据。`);
+  return profile;
 }

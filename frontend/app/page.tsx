@@ -77,6 +77,7 @@ type AnalysisMode = "overview" | "trend" | "combined" | "category" | "delivery" 
 type ProfileView = "画像" | "质量检查" | "清洗方案" | "多表关联" | "指标口径" | "计算执行" | "经营分析";
 type QualityDecision = "approved" | "kept";
 type PersistenceStatus = { status: "idle" | "saving" | "saved" | "conflict" | "error"; message: string };
+type SessionStatus = { authenticated: boolean; required: boolean } | null;
 
 type WorkspaceSnapshot = {
   version: 1;
@@ -273,6 +274,7 @@ export default function Home() {
   const [evidenceExport, setEvidenceExport] = useState<EvidenceExportStatus | null>(null);
   const [hasJoinedDataset, setHasJoinedDataset] = useState(false);
   const [persistence, setPersistence] = useState<PersistenceStatus>({ status: "idle", message: "" });
+  const [sessionStatus, setSessionStatus] = useState<SessionStatus>(null);
   const profileCardRef = useRef<HTMLElement | null>(null);
   const queryInputRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -281,6 +283,18 @@ export default function Home() {
   const latestTaskRunRef = useRef<TaskRun | null>(null);
   const persistedTaskContentRef = useRef("");
   const persistenceQueueRef = useRef(Promise.resolve());
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/session", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json() as Promise<{ authenticated: boolean; required: boolean }>;
+      })
+      .then((status) => { if (!cancelled) setSessionStatus(status); })
+      .catch(() => { if (!cancelled) setSessionStatus({ authenticated: false, required: true }); });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -596,6 +610,10 @@ export default function Home() {
   }
 
   async function runAnalysis(question: string) {
+    if (sessionStatus?.required && !sessionStatus.authenticated) {
+      setAgentNavigationNotice("当前部署要求先登录，登录后才能提交分析并保存证据。");
+      return;
+    }
     const normalized = question.trim();
     if (!normalized) return;
     setEvidenceExport(null);
@@ -1097,6 +1115,13 @@ export default function Home() {
             </div>
           </div>
 
+          {sessionStatus?.required && !sessionStatus.authenticated && (
+            <div className="auth-required-banner" role="alert">
+              <div><ShieldCheck size={17} /><span><strong>需要登录</strong> 此部署已开启账号隔离；登录后才能提交分析并保存 TaskRun 证据。</span></div>
+              <a href="/signin-with-chatgpt?return_to=%2F">使用 ChatGPT 登录</a>
+            </div>
+          )}
+
           {guidanceMode === "guided" && (
             <NoviceGuide
               step={guideStep}
@@ -1133,7 +1158,7 @@ export default function Home() {
                 ? `请输入业务问题，例如：${guidedTemplates.find((item) => !item.startsWith("检查")) ?? guidedTemplates[0] ?? "统计当前数据的业务对象数量"}`
                 : "请输入想了解的业务问题，例如：2018 年 GMV 是否增长？"}
             />
-            <button className="send-button" type="submit" aria-label="开始分析" disabled={isAnalyzing}>
+            <button className="send-button" type="submit" aria-label="开始分析" disabled={isAnalyzing || Boolean(sessionStatus?.required && !sessionStatus.authenticated)}>
               {isAnalyzing ? <LoaderCircle className="spin" size={18} /> : <Send size={18} />}
             </button>
           </form>
