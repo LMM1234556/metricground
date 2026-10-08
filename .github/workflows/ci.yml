@@ -1,0 +1,122 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: frontend
+
+jobs:
+  static-quality-gate:
+    name: Static quality gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run build and deterministic checks
+        run: npm run test:ci:static
+
+  browser-regression:
+    name: Browser regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chrome
+        id: chrome
+        uses: browser-actions/setup-chrome@v1
+
+      - name: Build production bundle
+        run: npm run build
+
+      - name: Start production preview and Chrome
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run start > /tmp/metricground-dev.log 2>&1 &
+          echo $! > /tmp/metricground-dev.pid
+
+          for attempt in {1..60}; do
+            if curl --fail --silent http://localhost:5173/ >/dev/null; then
+              break
+            fi
+            if [[ "$attempt" == "60" ]]; then
+              cat /tmp/metricground-dev.log
+              exit 1
+            fi
+            sleep 1
+          done
+
+          "${{ steps.chrome.outputs.chrome-path }}" \
+            --headless=new \
+            --no-sandbox \
+            --disable-dev-shm-usage \
+            --disable-background-timer-throttling \
+            --disable-backgrounding-occluded-windows \
+            --disable-renderer-backgrounding \
+            --remote-debugging-address=127.0.0.1 \
+            --remote-debugging-port=9224 \
+            http://localhost:5173/ \
+            > /tmp/metricground-chrome.log 2>&1 &
+          echo $! > /tmp/metricground-chrome.pid
+
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:9224/json/version >/dev/null; then
+              exit 0
+            fi
+            if [[ "$attempt" == "30" ]]; then
+              cat /tmp/metricground-chrome.log
+              exit 1
+            fi
+            sleep 1
+          done
+
+      - name: Run browser checks
+        run: npm run test:ci:browser
+
+      - name: Upload diagnostic logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-regression-logs
+          path: |
+            /tmp/metricground-dev.log
+            /tmp/metricground-chrome.log
+          if-no-files-found: ignore
+          retention-days: 7

@@ -1,0 +1,252 @@
+{
+  "generatedAt": "2026-10-08T10:05:43.060Z",
+  "referenceEngine": "pandas 3.0.2",
+  "executionEngine": "MetricGround browser-deterministic",
+  "taskCount": 30,
+  "passed": 30,
+  "failed": 0,
+  "passRate": 1,
+  "runtimeErrors": [],
+  "tasks": [
+    {
+      "id": "sales_orders-profile-rows",
+      "dataset": "sales_orders",
+      "category": "数据理解",
+      "expected": 11,
+      "actual": 11,
+      "passed": true
+    },
+    {
+      "id": "sales_orders-profile-columns",
+      "dataset": "sales_orders",
+      "category": "数据理解",
+      "expected": 5,
+      "actual": 5,
+      "passed": true
+    },
+    {
+      "id": "sales_orders-profile-missing",
+      "dataset": "sales_orders",
+      "category": "数据理解",
+      "expected": 2,
+      "actual": 2,
+      "passed": true
+    },
+    {
+      "id": "sales_orders-quality-1",
+      "dataset": "sales_orders",
+      "category": "质量检查",
+      "expected": "完全重复",
+      "actual": "完全重复",
+      "passed": true
+    },
+    {
+      "id": "sales_orders-quality-2",
+      "dataset": "sales_orders",
+      "category": "质量检查",
+      "expected": "无法识别",
+      "actual": "无法识别",
+      "passed": true
+    },
+    {
+      "id": "sales_orders-quality-3",
+      "dataset": "sales_orders",
+      "category": "质量检查",
+      "expected": "统计异常值",
+      "actual": "统计异常值",
+      "passed": true
+    },
+    {
+      "id": "sales_orders-metric-count",
+      "dataset": "sales_orders",
+      "category": "受控计算",
+      "expected": 7,
+      "actual": 7,
+      "passed": true
+    },
+    {
+      "id": "sales_orders-metric-amount",
+      "dataset": "sales_orders",
+      "category": "受控计算",
+      "expected": 10849,
+      "actual": 10849,
+      "passed": true
+    },
+    {
+      "id": "sales_orders-metric-average",
+      "dataset": "sales_orders",
+      "category": "受控计算",
+      "expected": 1549.857142857143,
+      "actual": 1549.86,
+      "passed": true
+    },
+    {
+      "id": "sales_orders-metric-ratio",
+      "dataset": "sales_orders",
+      "category": "受控计算",
+      "expected": 0.42857142857142855,
+      "actual": 0.4286,
+      "passed": true
+    },
+    {
+      "id": "marketing_customers-profile-rows",
+      "dataset": "marketing_customers",
+      "category": "数据理解",
+      "expected": 10,
+      "actual": 10,
+      "passed": true
+    },
+    {
+      "id": "marketing_customers-profile-columns",
+      "dataset": "marketing_customers",
+      "category": "数据理解",
+      "expected": 6,
+      "actual": 6,
+      "passed": true
+    },
+    {
+      "id": "marketing_customers-profile-missing",
+      "dataset": "marketing_customers",
+      "category": "数据理解",
+      "expected": 2,
+      "actual": 2,
+      "passed": true
+    },
+    {
+      "id": "marketing_customers-quality-1",
+      "dataset": "marketing_customers",
+      "category": "质量检查",
+      "expected": "完全重复",
+      "actual": "完全重复",
+      "passed": true
+    },
+    {
+      "id": "marketing_customers-quality-2",
+      "dataset": "marketing_customers",
+      "category": "质量检查",
+      "expected": "无法识别",
+      "actual": "无法识别",
+      "passed": true
+    },
+    {
+      "id": "marketing_customers-quality-3",
+      "dataset": "marketing_customers",
+      "category": "质量检查",
+      "expected": "统计异常值",
+      "actual": "统计异常值",
+      "passed": true
+    },
+    {
+      "id": "marketing_customers-metric-count",
+      "dataset": "marketing_customers",
+      "category": "受控计算",
+      "expected": 6,
+      "actual": 6,
+      "passed": true
+    },
+    {
+      "id": "marketing_customers-metric-amount",
+      "dataset": "marketing_customers",
+      "category": "受控计算",
+      "expected": 5950,
+      "actual": 5950,
+      "passed": true
+    },
+    {
+      "id": "marketing_customers-metric-average",
+      "dataset": "marketing_customers",
+      "category": "受控计算",
+      "expected": 991.6666666666666,
+      "actual": 991.67,
+      "passed": true
+    },
+    {
+      "id": "marketing_customers-metric-ratio",
+      "dataset": "marketing_customers",
+      "category": "受控计算",
+      "expected": 0.6666666666666666,
+      "actual": 0.6667000000000001,
+      "passed": true
+    },
+    {
+      "id": "inventory_operations-profile-rows",
+      "dataset": "inventory_operations",
+      "category": "数据理解",
+      "expected": 10,
+      "actual": 10,
+      "passed": true
+    },
+    {
+      "id": "inventory_operations-profile-columns",
+      "dataset": "inventory_operations",
+      "category": "数据理解",
+      "expected": 5,
+      "actual": 5,
+      "passed": true
+    },
+    {
+      "id": "inventory_operations-profile-missing",
+      "dataset": "inventory_operations",
+      "category": "数据理解",
+      "expected": 2,
+      "actual": 2,
+      "passed": true
+    },
+    {
+      "id": "inventory_operations-quality-1",
+      "dataset": "inventory_operations",
+      "category": "质量检查",
+      "expected": "完全重复",
+      "actual": "完全重复",
+      "passed": true
+    },
+    {
+      "id": "inventory_operations-quality-2",
+      "dataset": "inventory_operations",
+      "category": "质量检查",
+      "expected": "无法识别",
+      "actual": "无法识别",
+      "passed": true
+    },
+    {
+      "id": "inventory_operations-quality-3",
+      "dataset": "inventory_operations",
+      "category": "质量检查",
+      "expected": "统计异常值",
+      "actual": "统计异常值",
+      "passed": true
+    },
+    {
+      "id": "inventory_operations-metric-count",
+      "dataset": "inventory_operations",
+      "category": "受控计算",
+      "expected": 6,
+      "actual": 6,
+      "passed": true
+    },
+    {
+      "id": "inventory_operations-metric-amount",
+      "dataset": "inventory_operations",
+      "category": "受控计算",
+      "expected": 1044,
+      "actual": 1044,
+      "passed": true
+    },
+    {
+      "id": "inventory_operations-metric-average",
+      "dataset": "inventory_operations",
+      "category": "受控计算",
+      "expected": 174,
+      "actual": 174,
+      "passed": true
+    },
+    {
+      "id": "inventory_operations-metric-ratio",
+      "dataset": "inventory_operations",
+      "category": "受控计算",
+      "expected": 0.5,
+      "actual": 0.5,
+      "passed": true
+    }
+  ]
+}

@@ -1,0 +1,2 @@
+pandas==3.0.5
+data-formulator==0.7.0

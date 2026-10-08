@@ -1,0 +1,37 @@
+[
+  { "id": "overview-01", "intent": "overview", "question": "这份数据最重要的经营数字有哪些？" },
+  { "id": "overview-02", "intent": "overview", "question": "帮我快速盘点一下整体业务表现" },
+  { "id": "overview-03", "intent": "overview", "question": "一共有多少订单，成交规模大概是多少？" },
+  { "id": "overview-04", "intent": "overview", "question": "我想看订单、履约和客单表现" },
+  { "id": "overview-05", "intent": "overview", "question": "管理层首页应该关注哪些数值？" },
+
+  { "id": "trend-01", "intent": "trend", "question": "生意在不同月份的走势怎么样？" },
+  { "id": "trend-02", "intent": "trend", "question": "销售规模什么时候达到最高点？" },
+  { "id": "trend-03", "intent": "trend", "question": "请展示商品成交额随时间的变化" },
+  { "id": "trend-04", "intent": "trend", "question": "每个月卖出去的商品金额有何波动？" },
+  { "id": "trend-05", "intent": "trend", "question": "2017 到 2018 的 GMV 走势如何？" },
+
+  { "id": "combined-01", "intent": "combined", "question": "概括核心业绩，并告诉我月度走势" },
+  { "id": "combined-02", "intent": "combined", "question": "先给经营总览，再看各月 GMV 变化" },
+  { "id": "combined-03", "intent": "combined", "question": "订单和客单价表现怎样，销售额趋势又如何？" },
+  { "id": "combined-04", "intent": "combined", "question": "我既想了解整体规模，也想看时间变化" },
+  { "id": "combined-05", "intent": "combined", "question": "给我核心指标以及月度成交趋势" },
+
+  { "id": "category-01", "intent": "category", "question": "哪些产品线贡献的商品销售额最多？" },
+  { "id": "category-02", "intent": "category", "question": "主要收入规模集中在哪些商品类型？" },
+  { "id": "category-03", "intent": "category", "question": "列出成交金额最高的五个类目" },
+  { "id": "category-04", "intent": "category", "question": "各类商品的 GMV 排名是什么？" },
+  { "id": "category-05", "intent": "category", "question": "头部产品类别贡献占比如何？" },
+
+  { "id": "delivery-01", "intent": "delivery", "question": "晚收货的顾客更容易打低分吗？" },
+  { "id": "delivery-02", "intent": "delivery", "question": "履约是否准时与用户满意度有什么关系？" },
+  { "id": "delivery-03", "intent": "delivery", "question": "延误订单和正常订单的差评比例差多少？" },
+  { "id": "delivery-04", "intent": "delivery", "question": "物流超期是否伴随更多一二星评价？" },
+  { "id": "delivery-05", "intent": "delivery", "question": "按时到货和迟到订单的评价表现对比" },
+
+  { "id": "unsupported-01", "intent": "unsupported", "question": "哪个卖家的退款率最高？" },
+  { "id": "unsupported-02", "intent": "unsupported", "question": "请预测下季度销售额" },
+  { "id": "unsupported-03", "intent": "unsupported", "question": "目前库存还能卖多少天？" },
+  { "id": "unsupported-04", "intent": "unsupported", "question": "公司的净利润是多少？" },
+  { "id": "unsupported-05", "intent": "unsupported", "question": "哪家物流公司的运输成本最低？" }
+]

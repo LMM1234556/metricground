@@ -1,0 +1,78 @@
+version: 1
+dataset:
+  name: Olist Brazilian E-Commerce Public Dataset
+  classification: 匿名历史演示数据，非实时经营数据
+  analysis_window:
+    start_inclusive: 2017-01-01
+    end_exclusive: 2018-09-01
+  comparison_rule: 2018 年仅覆盖 1—8 月；年度增长必须改用 2017 年与 2018 年同期比较。
+
+grains:
+  orders: 每行一笔订单，主键 order_id
+  order_items: 每行一件订单商品，复合主键 order_id + order_item_id
+  customers: 每行一条订单客户记录，customer_unique_id 用于识别跨订单买家
+
+metrics:
+  total_orders:
+    label: 总订单量
+    formula: COUNT(DISTINCT order_id)
+    population: 分析时间范围内全部订单状态
+    unit: 笔
+  delivered_orders:
+    label: 已送达订单量
+    formula: COUNT(DISTINCT order_id)
+    population: order_status = delivered
+    unit: 笔
+  delivered_rate:
+    label: 送达率
+    formula: delivered_orders / total_orders
+    population: 分析时间范围内全部订单
+    unit: percent
+  delivered_buyers:
+    label: 已送达买家数
+    formula: COUNT(DISTINCT customer_unique_id)
+    population: 已送达订单对应的客户
+    unit: 人
+  product_gmv:
+    label: 商品 GMV
+    formula: SUM(order_items.price)
+    population: 已送达订单商品
+    unit: BRL
+    caveat: 不含运费，不等于企业收入或利润。
+  average_order_value:
+    label: 平均客单价
+    formula: product_gmv / delivered_orders
+    population: 已送达订单
+    unit: BRL_per_order
+  average_delivery_days:
+    label: 平均配送天数
+    formula: AVG(order_delivered_customer_date - order_purchase_timestamp)
+    population: 有实际送达时间的已送达订单
+    unit: days
+  category_product_gmv:
+    label: 品类商品 GMV
+    formula: SUM(order_items.price) GROUP BY category_name
+    population: 已送达订单商品
+    unit: BRL
+    caveat: 一笔订单可能包含多个品类，各品类订单数不可加总为总订单量。
+  negative_review_rate:
+    label: 负面评价率
+    formula: 负面评价订单数 / 有评价订单数
+    population: 有实际和预计送达时间且至少存在一条评价的已送达订单
+    unit: percent
+    negative_review_rule: 同一订单存在任一 review_score <= 2 的评价，即标记为负面评价订单。
+  late_delivery:
+    label: 延迟送达
+    formula: order_delivered_customer_date > order_estimated_delivery_date
+    population: 已送达订单
+    unit: boolean
+
+join_rules:
+  - 订单与商品表关联前，先将 order_items 按 order_id 汇总到订单粒度。
+  - 订单量始终使用 order_id 去重计数，不能使用商品明细行数代替订单数。
+  - 支付与商品明细不能直接同时连接到订单，否则可能形成多对多金额放大。
+
+reasoning_limits:
+  - 观察性分组只能说明关联，不能单独证明配送延迟导致负面评价。
+  - 不完整年度不能与完整年度直接比较。
+  - 不支持的指标必须明确返回不可用，不能套用默认答案。

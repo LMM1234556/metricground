@@ -1,0 +1,6 @@
+order_id,customer_id,order_status,purchase_date,item_sales,freight_value,region
+O-1001,C-001,delivered,2026-01-03,129.90,12.00,华东
+O-1002,C-002,delivered,2026-01-04,89.50,8.50,华南
+O-1003,C-002,shipped,2026-01-05,199.00,,华南
+O-1004,C-003,canceled,2026-01-06,0,0,华北
+O-1005,C-004,delivered,not-a-date,59.90,6.00,华东

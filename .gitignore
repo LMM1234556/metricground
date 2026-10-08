@@ -1,0 +1,27 @@
+.venv/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.env
+*.log
+artifacts/private/
+runtime/
+frontend/node_modules/
+frontend/scripts/node_modules/
+frontend/dist/
+frontend/.next/
+frontend/.wrangler/
+frontend/.vinext/
+frontend/.tmp_*/
+frontend/.env*
+!frontend/.env.example
+*.tsbuildinfo
+*.csv
+*.xlsx
+*.xls
+
+# 公开交付所需的小型合成样例与测试记录。
+!evaluation/fixtures/*.csv
+!evaluation/fixtures/*.xlsx
+!evaluation/novice_test_files/*.xlsx
+!evaluation/novice_usability_observation.csv

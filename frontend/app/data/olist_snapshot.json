@@ -1,0 +1,355 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-14T06:13:18.581041+00:00",
+  "source": {
+    "name": "Olist Brazilian E-Commerce Public Dataset",
+    "classification": "匿名历史演示数据，非实时经营数据",
+    "files": [
+      {
+        "id": "orders",
+        "name": "olist_orders_dataset.csv",
+        "rows": 99441
+      },
+      {
+        "id": "items",
+        "name": "olist_order_items_dataset.csv",
+        "rows": 112650
+      },
+      {
+        "id": "customers",
+        "name": "olist_customers_dataset.csv",
+        "rows": 99441
+      },
+      {
+        "id": "payments",
+        "name": "olist_order_payments_dataset.csv",
+        "rows": 103886
+      },
+      {
+        "id": "reviews",
+        "name": "olist_order_reviews_dataset.csv",
+        "rows": 104719
+      },
+      {
+        "id": "products",
+        "name": "olist_products_dataset.csv",
+        "rows": 32951
+      },
+      {
+        "id": "sellers",
+        "name": "olist_sellers_dataset.csv",
+        "rows": 3095
+      },
+      {
+        "id": "geolocation",
+        "name": "olist_geolocation_dataset.csv",
+        "rows": 1000163
+      },
+      {
+        "id": "category_translation",
+        "name": "product_category_name_translation.csv",
+        "rows": 71
+      }
+    ],
+    "fileCount": 9,
+    "totalRows": 1556417
+  },
+  "scope": {
+    "start": "2017-01-01",
+    "endInclusive": "2018-08-31",
+    "endExclusive": "2018-09-01",
+    "monthCount": 20,
+    "limitation": "2018 年仅覆盖 1—8 月，不应直接与 2017 全年比较。"
+  },
+  "kpis": {
+    "totalOrders": 99092,
+    "deliveredOrders": 96211,
+    "deliveredRate": 0.970926,
+    "deliveredBuyers": 93104,
+    "productGmv": 13181027.13,
+    "averageOrderValue": 137.0,
+    "averageDeliveryDays": 12.54
+  },
+  "monthly": [
+    {
+      "month": "2017-01",
+      "allOrders": 800,
+      "deliveredOrders": 750,
+      "productGmv": 111798.36,
+      "productGmvThousands": 111.8
+    },
+    {
+      "month": "2017-02",
+      "allOrders": 1780,
+      "deliveredOrders": 1653,
+      "productGmv": 234223.4,
+      "productGmvThousands": 234.22
+    },
+    {
+      "month": "2017-03",
+      "allOrders": 2682,
+      "deliveredOrders": 2546,
+      "productGmv": 359198.85,
+      "productGmvThousands": 359.2
+    },
+    {
+      "month": "2017-04",
+      "allOrders": 2404,
+      "deliveredOrders": 2303,
+      "productGmv": 340669.68,
+      "productGmvThousands": 340.67
+    },
+    {
+      "month": "2017-05",
+      "allOrders": 3700,
+      "deliveredOrders": 3546,
+      "productGmv": 489338.25,
+      "productGmvThousands": 489.34
+    },
+    {
+      "month": "2017-06",
+      "allOrders": 3245,
+      "deliveredOrders": 3135,
+      "productGmv": 421923.37,
+      "productGmvThousands": 421.92
+    },
+    {
+      "month": "2017-07",
+      "allOrders": 4026,
+      "deliveredOrders": 3872,
+      "productGmv": 481604.52,
+      "productGmvThousands": 481.6
+    },
+    {
+      "month": "2017-08",
+      "allOrders": 4331,
+      "deliveredOrders": 4193,
+      "productGmv": 554699.7,
+      "productGmvThousands": 554.7
+    },
+    {
+      "month": "2017-09",
+      "allOrders": 4285,
+      "deliveredOrders": 4150,
+      "productGmv": 607399.67,
+      "productGmvThousands": 607.4
+    },
+    {
+      "month": "2017-10",
+      "allOrders": 4631,
+      "deliveredOrders": 4478,
+      "productGmv": 648247.65,
+      "productGmvThousands": 648.25
+    },
+    {
+      "month": "2017-11",
+      "allOrders": 7544,
+      "deliveredOrders": 7289,
+      "productGmv": 987765.37,
+      "productGmvThousands": 987.77
+    },
+    {
+      "month": "2017-12",
+      "allOrders": 5673,
+      "deliveredOrders": 5513,
+      "productGmv": 726033.19,
+      "productGmvThousands": 726.03
+    },
+    {
+      "month": "2018-01",
+      "allOrders": 7269,
+      "deliveredOrders": 7069,
+      "productGmv": 924645.0,
+      "productGmvThousands": 924.64
+    },
+    {
+      "month": "2018-02",
+      "allOrders": 6728,
+      "deliveredOrders": 6555,
+      "productGmv": 826437.13,
+      "productGmvThousands": 826.44
+    },
+    {
+      "month": "2018-03",
+      "allOrders": 7211,
+      "deliveredOrders": 7003,
+      "productGmv": 953356.25,
+      "productGmvThousands": 953.36
+    },
+    {
+      "month": "2018-04",
+      "allOrders": 6939,
+      "deliveredOrders": 6798,
+      "productGmv": 973534.09,
+      "productGmvThousands": 973.53
+    },
+    {
+      "month": "2018-05",
+      "allOrders": 6873,
+      "deliveredOrders": 6749,
+      "productGmv": 977544.69,
+      "productGmvThousands": 977.54
+    },
+    {
+      "month": "2018-06",
+      "allOrders": 6167,
+      "deliveredOrders": 6099,
+      "productGmv": 856077.86,
+      "productGmvThousands": 856.08
+    },
+    {
+      "month": "2018-07",
+      "allOrders": 6292,
+      "deliveredOrders": 6159,
+      "productGmv": 867953.46,
+      "productGmvThousands": 867.95
+    },
+    {
+      "month": "2018-08",
+      "allOrders": 6512,
+      "deliveredOrders": 6351,
+      "productGmv": 838576.64,
+      "productGmvThousands": 838.58
+    }
+  ],
+  "topCategories": [
+    {
+      "rank": 1,
+      "category": "health_beauty",
+      "productGmv": 1229557.5,
+      "gmvShare": 0.093282,
+      "deliveredOrders": 8610,
+      "itemCount": 9422
+    },
+    {
+      "rank": 2,
+      "category": "watches_gifts",
+      "productGmv": 1163465.91,
+      "gmvShare": 0.088268,
+      "deliveredOrders": 5491,
+      "itemCount": 5855
+    },
+    {
+      "rank": 3,
+      "category": "bed_bath_table",
+      "productGmv": 1022955.77,
+      "gmvShare": 0.077608,
+      "deliveredOrders": 9267,
+      "itemCount": 10945
+    },
+    {
+      "rank": 4,
+      "category": "sports_leisure",
+      "productGmv": 952840.4,
+      "gmvShare": 0.072289,
+      "deliveredOrders": 7513,
+      "itemCount": 8414
+    },
+    {
+      "rank": 5,
+      "category": "computers_accessories",
+      "productGmv": 888055.59,
+      "gmvShare": 0.067374,
+      "deliveredOrders": 6518,
+      "itemCount": 7632
+    }
+  ],
+  "deliveryReview": {
+    "groups": [
+      {
+        "status": "延迟送达",
+        "reviewedOrders": 7658,
+        "negativeReviews": 4144,
+        "negativeReviewRate": 0.541133
+      },
+      {
+        "status": "按时或提前",
+        "reviewedOrders": 87902,
+        "negativeReviews": 8122,
+        "negativeReviewRate": 0.092398
+      }
+    ],
+    "rateGap": 0.448735,
+    "riskRatio": 5.8565,
+    "interpretationLimit": "观察性分组只能说明关联，不能单独证明配送延迟导致负面评价。"
+  },
+  "definitions": {
+    "totalOrders": "范围内按 order_id 去重后的全部状态订单数。",
+    "deliveredOrders": "范围内 order_status = delivered 的去重订单数。",
+    "productGmv": "已送达订单的商品价格 price 合计，不含运费，不等于企业收入或利润。",
+    "averageOrderValue": "商品 GMV ÷ 已送达订单量。",
+    "categoryProductGmv": "按商品品类汇总已送达订单商品价格；一笔订单可能包含多个品类，各品类订单数不可相加。",
+    "negativeReview": "同一订单只要存在一条 review_score <= 2 的评价，即标记为负面评价订单。",
+    "lateDelivery": "实际送达时间晚于预计送达时间的已送达订单。"
+  },
+  "validation": [
+    {
+      "id": "orders-primary-key",
+      "label": "订单主键重复检查",
+      "passed": true,
+      "detail": "重复 order_id：0"
+    },
+    {
+      "id": "items-composite-key",
+      "label": "订单商品复合键检查",
+      "passed": true,
+      "detail": "重复 order_id + order_item_id：0"
+    },
+    {
+      "id": "delivered-item-join",
+      "label": "已送达订单商品关联检查",
+      "passed": true,
+      "detail": "未匹配商品明细的已送达订单：0"
+    },
+    {
+      "id": "purchase-time",
+      "label": "购买时间完整性检查",
+      "passed": true,
+      "detail": "缺失购买时间：0"
+    },
+    {
+      "id": "gmv-reconciliation",
+      "label": "月度 GMV 与总额对账",
+      "passed": true,
+      "detail": "月度合计 R$13,181,027.13"
+    },
+    {
+      "id": "category-gmv-reconciliation",
+      "label": "品类 GMV 与总额对账",
+      "passed": true,
+      "detail": "全部品类合计 R$13,181,027.13"
+    },
+    {
+      "id": "review-order-grain",
+      "label": "评价聚合至订单粒度",
+      "passed": true,
+      "detail": "纳入评价分析订单：95,560"
+    },
+    {
+      "id": "negative-review-rate-range",
+      "label": "差评率取值范围检查",
+      "passed": true,
+      "detail": "两组差评率均位于 0%—100%"
+    }
+  ],
+  "query": {
+    "id": "olist-core-kpis-v1",
+    "language": "SQL",
+    "readOnly": true,
+    "text": "WITH item_by_order AS (\n  SELECT order_id, SUM(price) AS product_gmv\n  FROM order_items\n  GROUP BY order_id\n)\nSELECT\n  COUNT(DISTINCT o.order_id) AS delivered_orders,\n  SUM(i.product_gmv) AS product_gmv\nFROM orders o\nJOIN item_by_order i ON o.order_id = i.order_id\nWHERE o.order_status = 'delivered'\n  AND o.order_purchase_timestamp >= '2017-01-01'\n  AND o.order_purchase_timestamp < '2018-09-01';"
+  },
+  "queries": {
+    "category": {
+      "id": "olist-category-gmv-v1",
+      "language": "SQL",
+      "readOnly": true,
+      "text": "SELECT\n  COALESCE(t.product_category_name_english,\n           p.product_category_name, 'unknown') AS category_name,\n  COUNT(DISTINCT o.order_id) AS delivered_orders,\n  SUM(oi.price) AS product_gmv\nFROM orders o\nJOIN order_items oi ON o.order_id = oi.order_id\nJOIN products p ON oi.product_id = p.product_id\nLEFT JOIN category_translation t\n  ON p.product_category_name = t.product_category_name\nWHERE o.order_status = 'delivered'\n  AND o.order_purchase_timestamp >= '2017-01-01'\n  AND o.order_purchase_timestamp < '2018-09-01'\nGROUP BY category_name\nORDER BY product_gmv DESC\nLIMIT 5;"
+    },
+    "delivery": {
+      "id": "olist-delivery-review-v1",
+      "language": "SQL",
+      "readOnly": true,
+      "text": "WITH review_by_order AS (\n  SELECT order_id,\n         MAX(review_score <= 2) AS is_negative\n  FROM order_reviews\n  GROUP BY order_id\n)\nSELECT\n  CASE WHEN order_delivered_customer_date\n             > order_estimated_delivery_date\n       THEN '延迟送达' ELSE '按时或提前' END AS status,\n  COUNT(DISTINCT o.order_id) AS reviewed_orders,\n  AVG(r.is_negative) AS negative_review_rate\nFROM orders o\nJOIN review_by_order r ON o.order_id = r.order_id\nWHERE o.order_status = 'delivered'\n  AND o.order_purchase_timestamp >= '2017-01-01'\n  AND o.order_purchase_timestamp < '2018-09-01'\n  AND o.order_delivered_customer_date IS NOT NULL\n  AND o.order_estimated_delivery_date IS NOT NULL\nGROUP BY status;"
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "sales_orders": {
+    "file": "orders_quality_sample.csv",
+    "cleaned_rows": 7,
+    "metrics": {
+      "count": 7,
+      "amount": 10849.0,
+      "average": 1549.857142857143,
+      "ratio": 0.42857142857142855
+    }
+  },
+  "marketing_customers": {
+    "file": "marketing_customers_sample.csv",
+    "cleaned_rows": 6,
+    "metrics": {
+      "count": 6,
+      "amount": 5950.0,
+      "average": 991.6666666666666,
+      "ratio": 0.6666666666666666
+    }
+  },
+  "inventory_operations": {
+    "file": "inventory_operations_sample.csv",
+    "cleaned_rows": 6,
+    "metrics": {
+      "count": 6,
+      "amount": 1044.0,
+      "average": 174.0,
+      "ratio": 0.5
+    }
+  }
+}
