@@ -8,7 +8,13 @@
 - P04 使用 `novice_test_p04.xlsx`；
 - P05 使用 `novice_test_p05.xlsx`。
 
-不要把本文件或答案表发给参与者。参与者只应收到对应的 Excel 文件和 `novice_usability_test_protocol.md` 中的任务描述。
+不要把本文件、答案表或 `novice_usability_test_protocol.md` 发给参与者。参与者只应收到：
+
+- 对应的一份 Excel 文件；
+- `evaluation/novice_usability_participant_brief.md`；
+- 执行任务 5 时再提供 `evaluation/fixtures/join_orders_sample.csv` 和 `evaluation/fixtures/join_customers_sample.csv`。
+
+受保护站点必须使用受邀账号，或让参与者在主持人的已登录设备上依次测试。不要共享登录密码；若使用主持人设备，应在观察表 notes 中记录，测试结论只覆盖产品主流程，不覆盖独立登录体验。
 
 ## 主持要求
 
