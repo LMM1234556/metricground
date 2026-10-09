@@ -36,6 +36,7 @@
     "test:guide:e2e": "npm run test:browser:reset && node scripts/verify-novice-guide.mjs",
     "test:novice-files": "npm run test:browser:reset && node scripts/verify-novice-test-files.mjs",
     "test:persistence": "node scripts/verify-task-persistence.mjs",
+    "test:hosted:isolation": "node scripts/verify-hosted-owner-isolation.mjs",
     "test:upload-boundaries": "node --experimental-strip-types scripts/verify-upload-boundaries.mjs",
     "test:recovery": "node scripts/verify-workspace-recovery.mjs",
     "test:d1:recovery": "node scripts/verify-d1-recovery.mjs",
