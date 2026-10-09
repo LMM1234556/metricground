@@ -2,7 +2,7 @@
 
 MetricGround 面向使用 Excel/CSV 完成常见经营分析的初级数据分析师，提供数据理解、质量检查、指标口径确认、受控计算和结果验证。通用上传数据支持本地 Agent 规划、人工确认、确定性执行、TaskRun 状态追踪与证据导出；Olist 只作为内置演示数据，不再替代用户上传文件的分析结果。
 
-> **交付状态（2026-10-09）**：`v0.3.1` 已修复移动端慢网首次启动 DuckDB-WASM 超时；同源压缩资源、60 秒初始化边界和移动 4G 浏览器回归已落地。代码已发布到 [GitHub](https://github.com/LMM1234556/metricground)，并部署到 [受保护的 Sites 演示环境](https://metricground.chirpyseed1.chatgpt.site)。项目所有者和外部受邀身份均已在真实设备完成核心链路，后者在独立平板完成计算、DuckDB-WASM 复核和报告下载。该证据仍不等于生产级上线：跨账号人工越权拒绝、集中告警和值班流程及正式目标用户测试尚未完成。
+> **交付状态（2026-10-09）**：`v0.3.1` 已修复移动端慢网首次启动 DuckDB-WASM 超时；同源压缩资源、60 秒初始化边界和移动 4G 浏览器回归已落地。代码已发布到 [GitHub](https://github.com/LMM1234556/metricground)，并部署到 [受保护的 Sites 演示环境](https://metricground.chirpyseed1.chatgpt.site)。项目所有者和外部受邀身份均已在真实设备完成核心链路；双账号线上探针进一步验证双方可读取自己的 TaskRun（200），读取对方 TaskRun 均被隐藏（404），D1 所有者哈希不同。该证据仍不等于生产级上线：集中告警和值班流程及正式目标用户测试尚未完成。
 
 ![MetricGround 核心经营指标界面](docs/images/overview.png)
 
@@ -181,13 +181,13 @@ scripts/              Olist 数据复算和基线启动脚本
 - `npm run test:ci:browser`：在生产构建的本地预览和 Chromium 调试端口上运行 API 场景、文件、质量、计算、关联和新人引导回归。
 - `npm run test:execution:mobile`：在移动端视口、冷缓存和模拟 4G 网络下复跑受控计算与 DuckDB 独立复核。
 
-版本变化见 [CHANGELOG](CHANGELOG.md)，当前基线见 [v0.3.1 版本说明](docs/releases/v0.3.1.md)，移动端外部身份证据见 [v0.3.1 线上验证](evaluation/mobile-external-validation-v0.3.1-2026-10-09.md)，远程流水线证据见 [GitHub CI 验证](evaluation/remote-ci-validation-2026-10-09.md)，部署基线见 [Sites 部署验证](evaluation/private-deployment-validation-2026-10-09.md)，生产化边界和验收标准见 [生产化与迭代路线](docs/production_roadmap.md)。
+版本变化见 [CHANGELOG](CHANGELOG.md)，当前基线见 [v0.3.1 版本说明](docs/releases/v0.3.1.md)，移动端外部身份证据见 [v0.3.1 线上验证](evaluation/mobile-external-validation-v0.3.1-2026-10-09.md)，双账号隔离证据见 [线上身份隔离验证](evaluation/hosted-identity-isolation-2026-10-09.md)，远程流水线证据见 [GitHub CI 验证](evaluation/remote-ci-validation-2026-10-09.md)，部署基线见 [Sites 部署验证](evaluation/private-deployment-validation-2026-10-09.md)，生产化边界和验收标准见 [生产化与迭代路线](docs/production_roadmap.md)。
 
 ## 项目边界与后续计划
 
 当前版本仍是 MVP，不是生产级企业数据平台。页面已支持字段画像、质量检查、清洗派生副本、口径合同、计数/求和/平均/条件比例、分组、趋势、Top N、TaskRun、证据导出，以及最多三张表的受控关联。TaskRun 已持久化，刷新可恢复；受保护演示环境已启用托管身份强制认证，但角色权限和团队空间尚未实现，原始数据也不会跨设备同步。主计算仍在浏览器确定性引擎内完成，DuckDB-WASM 从同一数据版本使用独立 SQL 复算；这能发现计算实现、行数范围和边界不一致，但不能替代业务口径确认，也不是对源数据真实性的外部审计。当前比例不支持任意两个聚合量之比；数据库源连接、服务端文件存储、集中告警和正式目标用户测试仍未完成。
 
-交付入口见 `docs/release_handoff.md`。下一阶段计划：补一次跨账号人工越权拒绝测试，接入最小失败告警，并邀请 5 名目标用户完成无指导任务测试。之后只根据真实失败点决定是否增加通用比例、非常规金额字段指定和复杂 Excel 支持。当前自动化任务验收见 `evaluation/junior_analyst_task_assessment.md`，现状与边界以 `docs/capability_matrix.md` 为准；旧差距审计仅保留为历史快照。
+交付入口见 `docs/release_handoff.md`。下一阶段计划：接入最小失败告警，并邀请 5 名目标用户完成无指导任务测试。之后只根据真实失败点决定是否增加通用比例、非常规金额字段指定和复杂 Excel 支持。当前自动化任务验收见 `evaluation/junior_analyst_task_assessment.md`，现状与边界以 `docs/capability_matrix.md` 为准；旧差距审计仅保留为历史快照。
 
 ## 上游说明
 

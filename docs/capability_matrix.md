@@ -20,7 +20,7 @@ MetricGround 面向使用 Excel/CSV 完成常见经营分析的初级数据分�
 | `AnalysisSpec` | 已完成 | `verify-agent-foundation.mjs` | 当前为项目内部协议，不是外部行业标准 |
 | `TaskRun` 状态机与持久化 | 已完成 | `verify-agent-runtime.mjs`、`verify-task-persistence.mjs`、`verify-workspace-recovery.mjs` | D1 保存审计元数据，IndexedDB 保存当前浏览器工作区；跨设备仍需重传原始文件 |
 | API 基础防护 | 已完成本地验收 | `verify-task-persistence.mjs` | D1 固定窗口限流、同源写入、请求体上限和安全头；不是企业级 WAF |
-| 身份与 TaskRun 隔离 | 已部署，两个身份均完成各自主流程 | 自动化跨用户 404；线上强制登录；所有者与外部受邀身份均形成自己的完成态 TaskRun | 尚未人工执行“账号 A 读取账号 B TaskRun”的负向验证；无角色权限模型 |
+| 身份与 TaskRun 隔离 | 已完成线上双账号验证 | 所有者与外部身份自读均为 200、交叉读取均为 404；D1 探针 `owner_hash` 不同；线上强制登录 | 无角色权限、团队空间和企业级身份治理 |
 | D1 备份恢复 | 已完成本地演练 | `verify-d1-recovery.mjs`、运行时 SHA-256 清单 | 尚未验证远程 D1 的定时备份、保留策略和灾备时限 |
 | 健康检查与日志 | 已部署并完成线上烟测 | `/api/health` 200；Web/D1 为 `ok`；结构化健康事件；Sites Worker 日志 | 可选模型未配置且 `required=false`；无主动告警和值班流程 |
 | 双表/三表受控关联 | 已完成 | `verify-controlled-join.mjs`、`verify-multi-table-ui.mjs`、`verify-three-table-wizard.mjs` | 最多三表；等值单键/双字段复合键；`N:N` 默认禁止 |
@@ -42,7 +42,6 @@ MetricGround 面向使用 Excel/CSV 完成常见经营分析的初级数据分�
 
 ## 下一阶段
 
-1. 使用两个身份交叉读取 TaskRun，人工验证跨账号请求返回 404，并核对 D1 的不同 `owner_hash`；
-2. 在现有 Worker 日志检索基础上接入失败告警；
-3. 邀请 5 名目标用户进行无指导任务测试；
-4. 根据用户失败点决定是否补通用比例、非常规金额字段指定和复杂 Excel 支持。
+1. 在现有 Worker 日志检索基础上接入失败告警；
+2. 邀请 5 名目标用户进行无指导任务测试；
+3. 根据用户失败点决定是否补通用比例、非常规金额字段指定和复杂 Excel 支持。
