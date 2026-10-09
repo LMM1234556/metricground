@@ -4,9 +4,6 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "MetricGround｜可信经营分析 Agent",
   description: "基于业务口径、查询证据和结果校验的可信经营分析工作台。",
-  other: {
-    "codex-preview": "development",
-  },
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
