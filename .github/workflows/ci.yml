@@ -110,8 +110,17 @@ jobs:
             sleep 1
           done
 
-      - name: Run browser checks
-        run: npm run test:ci:browser
+      - name: Run agent and data workflow checks
+        run: npm run test:scenarios && npm run test:agent && npm run test:profile && npm run test:quality && npm run test:cleaning && npm run test:metric
+
+      - name: Run deterministic execution checks
+        run: npm run test:execution && npm run test:execution:mobile && npm run test:workbench
+
+      - name: Run release browser checks
+        run: npm run test:release:browser
+
+      - name: Run persistence and recovery checks
+        run: npm run test:recovery && npm run test:persistence && npm run test:d1:recovery
 
       - name: Upload diagnostic logs on failure
         if: failure()
