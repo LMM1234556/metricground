@@ -12,9 +12,9 @@ import {
 } from "./independent-verification";
 
 const DUCKDB_WASM_VERSION = "1.32.0";
-const DUCKDB_STARTUP_TIMEOUT_MS = 15_000;
+const DUCKDB_STARTUP_TIMEOUT_MS = 60_000;
 const NUMERIC_PATTERN = "^-?([0-9]+([.][0-9]*)?|[.][0-9]+)$";
-const configuredAssetBase = process.env.NEXT_PUBLIC_DUCKDB_ASSET_BASE_URL?.trim().replace(/\/$/, "");
+const configuredAssetBase = (process.env.NEXT_PUBLIC_DUCKDB_ASSET_BASE_URL?.trim() || "/duckdb").replace(/\/$/, "");
 
 function configuredBundles(assetBase: string): duckdb.DuckDBBundles {
   return {
@@ -29,12 +29,13 @@ function configuredBundles(assetBase: string): duckdb.DuckDBBundles {
   };
 }
 
-// The version-pinned official CDN avoids shipping 33–38 MiB WASM files as
-// Worker static assets. Offline deployments can opt into /duckdb after running
-// `npm run sync:duckdb`.
-const bundles = configuredAssetBase
-  ? configuredBundles(configuredAssetBase)
-  : duckdb.getJsDelivrBundles();
+// Ship the version-pinned runtime with the Site. Loading the large WASM binary
+// from a third-party CDN made mobile cold starts dependent on cross-origin
+// network conditions and could exceed the verification timeout. The WASM files
+// are gzip-compressed at build time so every published asset stays below the
+// hosting platform's single-file limit.
+const packagedBundles = configuredBundles(configuredAssetBase);
+const fallbackBundles = duckdb.getJsDelivrBundles();
 
 let databasePromise: Promise<duckdb.AsyncDuckDB> | null = null;
 let verificationSequence = 0;
@@ -57,13 +58,22 @@ function database() {
   if (!databasePromise) {
     databasePromise = (async () => {
       if (typeof Worker === "undefined") throw new Error("当前环境不支持 Web Worker，无法启动 DuckDB 独立复核。");
-      const bundle = await duckdb.selectBundle(bundles);
+      const usePackagedRuntime = typeof DecompressionStream !== "undefined";
+      const bundle = await duckdb.selectBundle(usePackagedRuntime ? packagedBundles : fallbackBundles);
       if (!bundle.mainWorker) throw new Error("无法选择可用的 DuckDB Worker。 ");
       const worker = await duckdb.createWorker(bundle.mainWorker);
       const instance = new duckdb.AsyncDuckDB(new duckdb.VoidLogger(), worker);
+      let moduleObjectUrl: string | null = null;
       try {
+        if (usePackagedRuntime) {
+          const response = await fetch(`${bundle.mainModule}.gz`);
+          if (!response.ok || !response.body) throw new Error(`DuckDB 本地运行时加载失败（HTTP ${response.status}）。`);
+          const decompressed = response.body.pipeThrough(new DecompressionStream("gzip"));
+          const moduleBytes = await new Response(decompressed).arrayBuffer();
+          moduleObjectUrl = URL.createObjectURL(new Blob([moduleBytes], { type: "application/wasm" }));
+        }
         await withTimeout(
-          instance.instantiate(bundle.mainModule, bundle.pthreadWorker),
+          instance.instantiate(moduleObjectUrl ?? bundle.mainModule, bundle.pthreadWorker),
           DUCKDB_STARTUP_TIMEOUT_MS,
           "DuckDB 独立复核引擎启动超时。",
         );
@@ -75,6 +85,8 @@ function database() {
       } catch (error) {
         worker.terminate();
         throw error;
+      } finally {
+        if (moduleObjectUrl) URL.revokeObjectURL(moduleObjectUrl);
       }
     })().catch((error) => {
       databasePromise = null;
@@ -82,6 +94,10 @@ function database() {
     });
   }
   return databasePromise;
+}
+
+export async function prepareDuckDBVerification() {
+  await database();
 }
 
 function quoteIdentifier(identifier: string) {

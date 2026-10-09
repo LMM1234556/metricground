@@ -38,6 +38,24 @@ async function evaluate(expression) {
 }
 
 await command("Runtime.enable");
+const mobileTest = process.argv.includes("--mobile") || process.env.METRICGROUND_MOBILE_TEST === "1";
+if (mobileTest) {
+  await command("Emulation.setDeviceMetricsOverride", {
+    width: 820,
+    height: 1180,
+    deviceScaleFactor: 2,
+    mobile: true,
+  });
+  await command("Network.enable");
+  await command("Network.setCacheDisabled", { cacheDisabled: true });
+  await command("Network.emulateNetworkConditions", {
+    offline: false,
+    latency: 120,
+    downloadThroughput: 1_000_000,
+    uploadThroughput: 500_000,
+    connectionType: "cellular4g",
+  });
+}
 await command("Page.reload", { ignoreCache: true });
 await new Promise((resolve) => setTimeout(resolve, 1700));
 const fileInput = await command("Runtime.evaluate", { expression: 'document.querySelector(\'input[type="file"]\')', returnByValue: false });

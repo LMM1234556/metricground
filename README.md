@@ -2,7 +2,7 @@
 
 MetricGround 面向使用 Excel/CSV 完成常见经营分析的初级数据分析师，提供数据理解、质量检查、指标口径确认、受控计算和结果验证。通用上传数据支持本地 Agent 规划、人工确认、确定性执行、TaskRun 状态追踪与证据导出；Olist 只作为内置演示数据，不再替代用户上传文件的分析结果。
 
-> **交付状态（2026-10-09）**：`v0.3.0` 本地门禁已通过，代码已发布到 [GitHub](https://github.com/LMM1234556/metricground)，并部署到 [受保护的 Sites 演示环境](https://metricground.chirpyseed1.chatgpt.site)。GitHub Actions 的静态质量门和完整浏览器回归均已真实运行通过；线上登录、计算、DuckDB-WASM 复核、证据导出、同浏览器恢复及 Web/D1 健康检查 7/7 通过。这仍不等于生产级上线或真实目标用户测试；第二身份隔离实测、集中告警和值班流程尚未完成。
+> **交付状态（2026-10-09）**：`v0.3.1` 已修复移动端慢网首次启动 DuckDB-WASM 超时；同源压缩资源、60 秒初始化边界和移动 4G 浏览器回归已落地。代码已发布到 [GitHub](https://github.com/LMM1234556/metricground)，并部署到 [受保护的 Sites 演示环境](https://metricground.chirpyseed1.chatgpt.site)。项目所有者和外部受邀身份均已在真实设备完成核心链路，后者在独立平板完成计算、DuckDB-WASM 复核和报告下载。该证据仍不等于生产级上线：跨账号人工越权拒绝、集中告警和值班流程及正式目标用户测试尚未完成。
 
 ![MetricGround 核心经营指标界面](docs/images/overview.png)
 
@@ -120,7 +120,7 @@ npm run dev
 
 打开 `http://localhost:5173/`。没有安装模型时，系统会使用安全的规则路由完成受支持任务；这不会绕过指标确认、确定性计算和结果验证。
 
-DuckDB-WASM 默认从固定版本 `@duckdb/duckdb-wasm@1.32.0` 的官方 jsDelivr 路径加载，避免将超过部署平台单文件限制的 WASM 打入静态资源。需要完全离线运行时执行 `npm run sync:duckdb`，并在 `.env.local` 中设置 `NEXT_PUBLIC_DUCKDB_ASSET_BASE_URL=/duckdb`。
+`npm run dev` 和 `npm run build` 会先执行 `npm run sync:duckdb`，把固定版本 `@duckdb/duckdb-wasm@1.32.0` 的 Worker 与 WASM 压缩为同源 `/duckdb` 资源。浏览器优先加载同源压缩文件；只有不支持 `DecompressionStream` 时才回退到固定版本 jsDelivr。可通过 `NEXT_PUBLIC_DUCKDB_ASSET_BASE_URL` 覆盖资源根路径。
 
 ### 2. 可选：启用本地模型
 
@@ -179,14 +179,15 @@ scripts/              Olist 数据复算和基线启动脚本
 
 - `npm run test:ci:static`：代码规范、类型、构建和不依赖运行服务的确定性测试；
 - `npm run test:ci:browser`：在生产构建的本地预览和 Chromium 调试端口上运行 API 场景、文件、质量、计算、关联和新人引导回归。
+- `npm run test:execution:mobile`：在移动端视口、冷缓存和模拟 4G 网络下复跑受控计算与 DuckDB 独立复核。
 
-版本变化见 [CHANGELOG](CHANGELOG.md)，当前基线见 [v0.3.0 版本说明](docs/releases/v0.3.0.md)，本地门禁证据见 [v0.3.0 发布验证](evaluation/release-validation-v0.3.0-2026-10-08.md)，远程流水线证据见 [GitHub CI 验证](evaluation/remote-ci-validation-2026-10-09.md)，私有部署证据见 [Sites 部署验证](evaluation/private-deployment-validation-2026-10-09.md)，生产化边界和验收标准见 [生产化与迭代路线](docs/production_roadmap.md)。
+版本变化见 [CHANGELOG](CHANGELOG.md)，当前基线见 [v0.3.1 版本说明](docs/releases/v0.3.1.md)，移动端外部身份证据见 [v0.3.1 线上验证](evaluation/mobile-external-validation-v0.3.1-2026-10-09.md)，远程流水线证据见 [GitHub CI 验证](evaluation/remote-ci-validation-2026-10-09.md)，部署基线见 [Sites 部署验证](evaluation/private-deployment-validation-2026-10-09.md)，生产化边界和验收标准见 [生产化与迭代路线](docs/production_roadmap.md)。
 
 ## 项目边界与后续计划
 
 当前版本仍是 MVP，不是生产级企业数据平台。页面已支持字段画像、质量检查、清洗派生副本、口径合同、计数/求和/平均/条件比例、分组、趋势、Top N、TaskRun、证据导出，以及最多三张表的受控关联。TaskRun 已持久化，刷新可恢复；受保护演示环境已启用托管身份强制认证，但角色权限和团队空间尚未实现，原始数据也不会跨设备同步。主计算仍在浏览器确定性引擎内完成，DuckDB-WASM 从同一数据版本使用独立 SQL 复算；这能发现计算实现、行数范围和边界不一致，但不能替代业务口径确认，也不是对源数据真实性的外部审计。当前比例不支持任意两个聚合量之比；数据库源连接、服务端文件存储、集中告警和正式目标用户测试仍未完成。
 
-交付入口见 `docs/release_handoff.md`。下一阶段计划：补第二身份隔离实测、接入最小失败告警，并邀请 5 名目标用户完成无指导任务测试。之后只根据真实失败点决定是否增加通用比例、非常规金额字段指定和复杂 Excel 支持。当前自动化任务验收见 `evaluation/junior_analyst_task_assessment.md`，现状与边界以 `docs/capability_matrix.md` 为准；旧差距审计仅保留为历史快照。
+交付入口见 `docs/release_handoff.md`。下一阶段计划：补一次跨账号人工越权拒绝测试，接入最小失败告警，并邀请 5 名目标用户完成无指导任务测试。之后只根据真实失败点决定是否增加通用比例、非常规金额字段指定和复杂 Excel 支持。当前自动化任务验收见 `evaluation/junior_analyst_task_assessment.md`，现状与边界以 `docs/capability_matrix.md` 为准；旧差距审计仅保留为历史快照。
 
 ## 上游说明
 

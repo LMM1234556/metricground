@@ -1,6 +1,6 @@
 {
   "name": "metricground",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
@@ -9,9 +9,9 @@
     "install:ci": "node scripts/install-ci.mjs",
     "sync:duckdb": "node scripts/sync-duckdb-assets.mjs",
     "dev": "node scripts/run-framework.mjs dev",
-    "build": "node scripts/run-framework.mjs build",
+    "build": "npm run sync:duckdb && node scripts/run-framework.mjs build",
     "start": "node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js dev --config dist/server/wrangler.json --local --persist-to .wrangler/state --ip 127.0.0.1 --port 5173 --inspector-port 0",
-    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern public/duckdb --ignore-pattern runtime",
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern public/duckdb --ignore-pattern runtime --ignore-pattern .browser-test --ignore-pattern .sites-runtime",
     "typecheck": "tsc --noEmit",
     "test:core": "node --experimental-strip-types scripts/verify-core-boundaries.mjs",
     "test:profile": "npm run test:browser:reset && node scripts/verify-file-profile.mjs ../evaluation/fixtures/excel_multi_sheet_sample.xlsx",
@@ -20,6 +20,7 @@
     "test:cleaning": "npm run test:browser:reset && node scripts/verify-cleaning-workflow.mjs",
     "test:metric": "npm run test:browser:reset && node scripts/verify-metric-contract.mjs",
     "test:execution": "npm run test:browser:reset && node scripts/verify-controlled-execution.mjs",
+    "test:execution:mobile": "npm run test:browser:reset && node scripts/verify-controlled-execution.mjs --mobile",
     "test:analysis": "node --experimental-strip-types scripts/verify-business-analysis-core.mjs",
     "test:analysis:e2e": "npm run test:browser:reset && node scripts/verify-business-analysis.mjs",
     "test:agent": "npm run test:browser:reset && node scripts/verify-agent-orchestration.mjs",
@@ -43,7 +44,7 @@
     "test:browser:reset": "node scripts/reset-browser-workspace.mjs",
     "test:workbench": "npm run test:browser:reset && node scripts/evaluate-workbench.mjs",
     "test:ci:static": "npm run lint && npm run typecheck && npm run build && npm run test:core && npm run test:upload-boundaries && npm run test:quality-impact && npm run test:analysis && npm run test:agent:foundation && npm run test:catalog && npm run test:join && npm run test:agent:runtime && npm run test:evidence && npm run test:providers",
-    "test:ci:browser": "npm run test:scenarios && npm run test:agent && npm run test:profile && npm run test:quality && npm run test:cleaning && npm run test:metric && npm run test:execution && npm run test:workbench && npm run test:release:browser && npm run test:recovery && npm run test:persistence && npm run test:d1:recovery",
+    "test:ci:browser": "npm run test:scenarios && npm run test:agent && npm run test:profile && npm run test:quality && npm run test:cleaning && npm run test:metric && npm run test:execution && npm run test:execution:mobile && npm run test:workbench && npm run test:release:browser && npm run test:recovery && npm run test:persistence && npm run test:d1:recovery",
     "test:release": "npm run lint && npm run typecheck && npm run build && npm run test:core && npm run test:profile && npm run test:quality && npm run test:quality-impact && npm run test:cleaning && npm run test:metric && npm run test:execution && npm run test:analysis && npm run test:agent:foundation && npm run test:catalog && npm run test:join && npm run test:agent:runtime && npm run test:evidence && npm run test:scenarios && npm run test:providers && npm run test:workbench",
     "test:release:browser": "npm run test:analysis:e2e && npm run test:guide:e2e && npm run test:join:e2e && npm run test:join:reconciliation && npm run test:join:three-table && npm run test:novice-files",
     "db:generate": "drizzle-kit generate"

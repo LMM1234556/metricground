@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, BarChart3, Check, Code2, DatabaseZap, Play, ShieldCheck } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { AgentPlan } from "../lib/agent-plan";
@@ -36,6 +36,15 @@ export default function BusinessAnalysis({ profile, agentPlan, question, onExecu
   const amountReconciliationRisk = config.aggregation !== "count_distinct" && config.valueField
     ? profile.joinAmountReconciliations?.find((item) => item.qualifiedField === config.valueField && item.status !== "balanced") ?? null
     : null;
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void import("../lib/duckdb-verification")
+        .then(({ prepareDuckDBVerification }) => prepareDuckDBVerification())
+        .catch(() => undefined);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   function update<K extends keyof BusinessAnalysisConfig>(key: K, value: BusinessAnalysisConfig[K]) {
     setConfig((current) => ({ ...current, [key]: value }));

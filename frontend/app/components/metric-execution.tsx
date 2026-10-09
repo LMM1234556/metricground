@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, Check, Code2, DatabaseZap, Play, ShieldCheck } from "lucide-react";
 import type { MetricContract } from "../lib/metric-contract";
 import type { DatasetProfile } from "../lib/tabular-profile";
@@ -33,6 +33,15 @@ export default function MetricExecution({ contract, profile, onExecution, onRevi
   const amountReconciliationRisk = contract && ["amount", "average"].includes(contract.metricType) && contract.valueField
     ? profile.joinAmountReconciliations?.find((item) => item.qualifiedField === contract.valueField && item.status !== "balanced") ?? null
     : null;
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void import("../lib/duckdb-verification")
+        .then(({ prepareDuckDBVerification }) => prepareDuckDBVerification())
+        .catch(() => undefined);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   function updateRule(ruleName: keyof ExecutionConfig, patch: Partial<FilterRule>) {
     setConfig((current) => ({ ...current, [ruleName]: { ...current[ruleName], ...patch } }));

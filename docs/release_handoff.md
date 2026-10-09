@@ -39,7 +39,7 @@ npm run test:release
 npm run test:release:browser
 ```
 
-完整生产构建门禁使用 `npm run test:ci:static`；启动 `npm start` 和调试浏览器后运行 `npm run test:ci:browser`。后者还会执行 API 防护与 D1 隔离恢复演练。
+完整生产构建门禁使用 `npm run test:ci:static`；启动 `npm start` 和调试浏览器后运行 `npm run test:ci:browser`。后者还会执行移动冷缓存模拟 4G、API 防护与 D1 隔离恢复演练。
 
 验收结果以 `evaluation/release-acceptance-2026-09-22.md` 为准。单个脚本通过不代表生产级准确率，浏览器回归也不替代真实目标用户测试。
 
@@ -58,8 +58,9 @@ npm run test:release:browser
 - 项目所有者手工冒烟测试：已走通 3/5 份；
 - 正式目标用户测试：尚未完成；
 - 本地 Git 提交与标签：已建立；公开 GitHub 仓库与远程 CI：已建立并真实运行通过。
-- 受保护部署：Sites 版本 2 成功，地址为 `https://metricground.chirpyseed1.chatgpt.site`；强制登录变量和远程 D1 表已核实。
+- 受保护部署：Sites 版本 3 成功，地址为 `https://metricground.chirpyseed1.chatgpt.site`；强制登录变量和远程 D1 表已核实。
 - 线上验收：7/7 通过，覆盖登录、Web/D1 健康检查、上传、规划、批准、计算、DuckDB-WASM 复核、证据导出和同浏览器刷新恢复；TaskRun 修订 1—3、幂等写入和所有者绑定已在 D1 核实。
+- 外部身份移动端验收：独立平板完成自己的主计算、DuckDB 复核、TaskRun 持久化和报告下载；尚未人工交叉读取另一身份的 TaskRun。
 
 “项目所有者测试 3 份文件”不能写成“3 名新人完成测试”。对外可以陈述：已具备真人测试材料和记录方案，正在进入目标用户验证阶段。
 
@@ -74,7 +75,7 @@ npm run test:release:browser
 
 ## 发布前仍需人工完成
 
-1. 使用第二个身份验证线上跨用户 TaskRun 不可见；
+1. 使用两个身份交叉读取线上 TaskRun，确认均返回 404，并核对 D1 中不同 `owner_hash`；
 2. 选择项目许可证并确认 Olist 数据展示范围；
 3. 再次检查提交中不包含 `.env`、API Key、浏览器配置和本地运行日志；
 4. 邀请 5 名目标用户执行无指导测试，并把记录写入观察表。

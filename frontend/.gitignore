@@ -46,3 +46,5 @@ next-env.d.ts
 /outputs/
 /work/
 /runtime/
+/public/duckdb/
+/.browser-test/

@@ -1,6 +1,6 @@
 # MetricGround 当前能力与证据矩阵
 
-> 当前基准日期：2026-10-09（v0.3.0 + 私有部署补丁）
+> 当前基准日期：2026-10-09（v0.3.1）
 > 产品阶段：可用于面试演示和目标用户测试的 MVP，不是生产级企业数据平台。
 
 ## 产品定位
@@ -15,12 +15,12 @@ MetricGround 面向使用 Excel/CSV 完成常见经营分析的初级数据分�
 | 数据质量检查 | 已完成基础规则 | `verify-quality-checks.mjs`、`verify-quality-impact.mjs` | 跨字段业务规则和企业自定义合法值域仍有限 |
 | 受控清洗副本 | 已完成 | `verify-cleaning-workflow.mjs` | 只允许完全重复、指定字段缺失、无效日期三类白名单规则 |
 | 指标口径合同 | 已完成 | `verify-metric-contract.mjs` | 通用“任意聚合量 / 任意聚合量”比例尚未实现 |
-| 单指标受控计算 | 已完成 | `verify-controlled-execution.mjs`、`verify-core-boundaries.mjs` | 浏览器确定性主计算 + DuckDB-WASM 独立 SQL 复算；业务口径仍需人工确认 |
+| 单指标受控计算 | 已完成 | `verify-controlled-execution.mjs`、`verify-core-boundaries.mjs`、`test:execution:mobile` | 浏览器确定性主计算 + DuckDB-WASM 独立 SQL 复算；已覆盖移动冷缓存模拟 4G，业务口径仍需人工确认 |
 | 分组、趋势、Top N | 已完成 | `verify-business-analysis-core.mjs`、`verify-business-analysis.mjs` | 只支持结构化白名单聚合，不执行任意生成代码 |
 | `AnalysisSpec` | 已完成 | `verify-agent-foundation.mjs` | 当前为项目内部协议，不是外部行业标准 |
 | `TaskRun` 状态机与持久化 | 已完成 | `verify-agent-runtime.mjs`、`verify-task-persistence.mjs`、`verify-workspace-recovery.mjs` | D1 保存审计元数据，IndexedDB 保存当前浏览器工作区；跨设备仍需重传原始文件 |
 | API 基础防护 | 已完成本地验收 | `verify-task-persistence.mjs` | D1 固定窗口限流、同源写入、请求体上限和安全头；不是企业级 WAF |
-| 身份与 TaskRun 隔离 | 已部署并完成所有者主流程烟测 | 本地跨用户 404；线上强制登录；TaskRun 修订 1—3、所有者绑定和刷新恢复记录 | 线上只验证当前所有者，尚无第二身份的跨用户隔离实测；无角色权限模型 |
+| 身份与 TaskRun 隔离 | 已部署，两个身份均完成各自主流程 | 自动化跨用户 404；线上强制登录；所有者与外部受邀身份均形成自己的完成态 TaskRun | 尚未人工执行“账号 A 读取账号 B TaskRun”的负向验证；无角色权限模型 |
 | D1 备份恢复 | 已完成本地演练 | `verify-d1-recovery.mjs`、运行时 SHA-256 清单 | 尚未验证远程 D1 的定时备份、保留策略和灾备时限 |
 | 健康检查与日志 | 已部署并完成线上烟测 | `/api/health` 200；Web/D1 为 `ok`；结构化健康事件；Sites Worker 日志 | 可选模型未配置且 `required=false`；无主动告警和值班流程 |
 | 双表/三表受控关联 | 已完成 | `verify-controlled-join.mjs`、`verify-multi-table-ui.mjs`、`verify-three-table-wizard.mjs` | 最多三表；等值单键/双字段复合键；`N:N` 默认禁止 |
@@ -30,7 +30,7 @@ MetricGround 面向使用 Excel/CSV 完成常见经营分析的初级数据分�
 | 本地/云模型降级 | 已完成 | `verify-model-providers.mjs` | 云模型需要用户主动配置；模型不接收原始明细行 |
 | 新人引导自动化验收 | 已完成 | `verify-novice-guide.mjs` 24/24；5 份测试文件均可读取 | 只能证明流程闭环，不代表真实新人理解和独立完成 |
 | 正式目标用户研究 | 进行前准备完成 | 测试方案、观察表和 5 份合成文件已完成；项目所有者手工走通 3/5 份 | 尚无 5 名独立目标用户数据，不能声称“新人测试通过” |
-| 远程仓库与受保护部署 | 已完成面试 MVP 验收 | 公开 GitHub 仓库；远程静态门禁与浏览器回归通过；Sites 版本 2 与线上主链路 7/7 | 站点为 owner-only 演示，不是公开生产服务；无主动告警和 SLA |
+| 远程仓库与受保护部署 | 已完成面试 MVP 验收 | 公开 GitHub 仓库；远程静态门禁与浏览器回归通过；Sites 版本 3；所有者和外部受邀身份线上主链路通过 | 站点为受保护演示，不是公开生产服务；无主动告警和 SLA |
 | 数据库、权限、多人协作 | 部分完成 | D1 持久化、幂等并发控制、条件式所有者隔离 | 无任务历史 UI、角色权限、团队空间和企业治理，不应描述为企业级数据平台 |
 
 ## 面试时可以陈述的结论
@@ -42,7 +42,7 @@ MetricGround 面向使用 Excel/CSV 完成常见经营分析的初级数据分�
 
 ## 下一阶段
 
-1. 使用第二个身份验证跨用户 TaskRun 不可见，避免把本地隔离测试等同于线上多用户验证；
+1. 使用两个身份交叉读取 TaskRun，人工验证跨账号请求返回 404，并核对 D1 的不同 `owner_hash`；
 2. 在现有 Worker 日志检索基础上接入失败告警；
 3. 邀请 5 名目标用户进行无指导任务测试；
 4. 根据用户失败点决定是否补通用比例、非常规金额字段指定和复杂 Excel 支持。
