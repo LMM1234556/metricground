@@ -1,6 +1,6 @@
 # MetricGround 告警失败—恢复隔离演练
 
-日期：2026-10-09  
+日期：2026-10-09
 范围：告警判定状态机，不注入生产故障
 
 ## 演练目标
@@ -25,7 +25,7 @@ cd frontend
 npm run test:alerting
 ```
 
-实现：`frontend/scripts/lib/alert-policy.mjs`  
+实现：`frontend/scripts/lib/alert-policy.mjs`
 验证：`frontend/scripts/verify-alert-policy.mjs`
 
 ## 证据边界
