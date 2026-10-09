@@ -22,7 +22,7 @@ MetricGround 面向使用 Excel/CSV 完成常见经营分析的初级数据分�
 | API 基础防护 | 已完成本地验收 | `verify-task-persistence.mjs` | D1 固定窗口限流、同源写入、请求体上限和安全头；不是企业级 WAF |
 | 身份与 TaskRun 隔离 | 已部署并完成所有者主流程烟测 | 本地跨用户 404；线上强制登录；TaskRun 修订 1—3、所有者绑定和刷新恢复记录 | 线上只验证当前所有者，尚无第二身份的跨用户隔离实测；无角色权限模型 |
 | D1 备份恢复 | 已完成本地演练 | `verify-d1-recovery.mjs`、运行时 SHA-256 清单 | 尚未验证远程 D1 的定时备份、保留策略和灾备时限 |
-| 健康检查与日志 | 已部署基础能力 | `/api/health`、结构化 API 日志、Sites Worker 日志 | 主流程日志已核验且最近错误查询为 0；尚未直接访问线上健康检查，也无主动告警和值班流程 |
+| 健康检查与日志 | 已部署并完成线上烟测 | `/api/health` 200；Web/D1 为 `ok`；结构化健康事件；Sites Worker 日志 | 可选模型未配置且 `required=false`；无主动告警和值班流程 |
 | 双表/三表受控关联 | 已完成 | `verify-controlled-join.mjs`、`verify-multi-table-ui.mjs`、`verify-three-table-wizard.mjs` | 最多三表；等值单键/双字段复合键；`N:N` 默认禁止 |
 | 关联金额对账 | 已完成常见金额字段 | `verify-join-reconciliation-ui.mjs` | 自动识别常见金额字段名；非常规字段名尚缺人工指定入口 |
 | 证据包导出 | 已完成 | `verify-evidence-package.mjs` | 不含原始数据行；尚无服务端历史审计库 |
@@ -42,9 +42,8 @@ MetricGround 面向使用 Excel/CSV 完成常见经营分析的初级数据分�
 
 ## 下一阶段
 
-1. 由项目所有者直接访问线上 `/api/health`，保存 Web、D1 与可选模型状态；
+1. 创建 GitHub 远程仓库并让远程 CI 实际通过；
 2. 使用第二个身份验证跨用户 TaskRun 不可见，避免把本地隔离测试等同于线上多用户验证；
-3. 创建 GitHub 远程仓库并让远程 CI 实际通过；
-4. 在现有 Worker 日志检索基础上接入失败告警；
-5. 邀请 5 名目标用户进行无指导任务测试；
-6. 根据用户失败点决定是否补通用比例、非常规金额字段指定和复杂 Excel 支持。
+3. 在现有 Worker 日志检索基础上接入失败告警；
+4. 邀请 5 名目标用户进行无指导任务测试；
+5. 根据用户失败点决定是否补通用比例、非常规金额字段指定和复杂 Excel 支持。
