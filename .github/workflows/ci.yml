@@ -62,6 +62,9 @@ jobs:
         id: chrome
         uses: browser-actions/setup-chrome@v1
 
+      - name: Prepare runtime output directory
+        run: mkdir -p ../runtime
+
       - name: Build production bundle
         run: npm run build
 

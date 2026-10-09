@@ -1,5 +1,5 @@
 {
-  "name": "metricground-olist-agent",
+  "name": "metricground",
   "version": "0.3.0",
   "private": true,
   "engines": {
