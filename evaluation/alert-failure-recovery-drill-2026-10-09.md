@@ -28,6 +28,14 @@ npm run test:alerting
 实现：`frontend/scripts/lib/alert-policy.mjs`
 验证：`frontend/scripts/verify-alert-policy.mjs`
 
+## 验证结果
+
+- 12 个转换场景全部通过；
+- 其中产生 7 次预期通知，其余重复观测保持静默；
+- 演练结束状态为 `healthy`；
+- 本地 `test:ci:static` 全部通过；
+- GitHub Actions 运行 `37925085687` 在提交 `1dbb78f5f4b0ddda1f70f577a2348b88dddabb70` 上完成，结论为 `success`。
+
 ## 证据边界
 
 该演练证明告警判定、去重和恢复转换可重复验证，并已进入 CI；它不证明 Sites 通知通道已经真实送达，也不替代首次定时运行记录。真实送达仍需保留平台通知及其对应时间窗口，不能用本地状态机通过冒充。
