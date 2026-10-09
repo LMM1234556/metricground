@@ -6,6 +6,15 @@
 
 首次成功运行：`https://github.com/LMM1234556/metricground/actions/runs/37884167100`
 
+v0.3.1 移动端 DuckDB 加固运行：`https://github.com/LMM1234556/metricground/actions/runs/37898564862`
+
+| v0.3.1 项目 | 结果 |
+|---|---|
+| 提交 | `86e766242d0a47882581437f2081a0914d3ea169` |
+| Static quality gate | 通过，47 秒 |
+| Browser regression | 通过，2 分 12 秒；包含移动视口、冷缓存和模拟 4G 的 DuckDB 独立复核 |
+| 总结论 | 通过，总时长 2 分 16 秒 |
+
 | 项目 | 结果 |
 |---|---|
 | 提交 | `33f3fa02c7a19d53bd98cf8bab44e7dceedb30d0` |
