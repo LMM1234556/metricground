@@ -1,4 +1,7 @@
 import { ensureTaskRunSchema, taskRunDb } from "../../lib/task-run-persistence.server";
+import packageJson from "../../../package.json";
+
+const APP_VERSION = packageJson.version;
 
 export async function GET(request: Request) {
   const checkedAt = new Date().toISOString();
@@ -20,7 +23,7 @@ export async function GET(request: Request) {
       model = { status: "unavailable", required: false, latencyMs: Date.now() - modelStartedAt };
     }
     const body = {
-      status: "ok", version: "0.3.0", checkedAt,
+      status: "ok", version: APP_VERSION, checkedAt,
       checks: { web: { status: "ok" }, d1: { status: "ok", latencyMs: d1LatencyMs }, model },
     };
     console.log(JSON.stringify({ level: "info", event: "health_check", requestId, status: "ok", d1LatencyMs, modelStatus: model.status }));
@@ -30,7 +33,7 @@ export async function GET(request: Request) {
   } catch (error) {
     const diagnostic = error instanceof Error ? error.message : "Unknown health check error";
     const body = {
-      status: "degraded", version: "0.3.0", checkedAt,
+      status: "degraded", version: APP_VERSION, checkedAt,
       checks: { web: { status: "ok" }, d1: { status: "failed", latencyMs: Date.now() - d1StartedAt } },
       error: "数据库健康检查失败。",
     };

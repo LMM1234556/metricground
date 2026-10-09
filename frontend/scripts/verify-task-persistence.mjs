@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+
+const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
 
 const baseUrl = process.env.METRICGROUND_BASE_URL ?? "http://127.0.0.1:5173";
 const suffix = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
@@ -34,8 +37,10 @@ async function requestJson(url, init = {}, maximumAttempts = 3) {
   let latest;
   for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
     let response;
+    let raw;
     try {
       response = await fetch(url, init);
+      raw = await response.text();
     } catch (error) {
       latest = { raw: error instanceof Error ? error.message : String(error) };
       if (attempt < maximumAttempts) {
@@ -44,7 +49,6 @@ async function requestJson(url, init = {}, maximumAttempts = 3) {
       }
       throw error;
     }
-    const raw = await response.text();
     latest = { status: response.status, headers: response.headers, raw };
     if (response.status === 503 && /worker restarted mid-request/i.test(raw) && attempt < maximumAttempts) {
       await new Promise((resolve) => setTimeout(resolve, attempt * 100));
@@ -65,7 +69,7 @@ const healthResponse = await requestJson(`${baseUrl}/api/health`);
 const health = healthResponse.body;
 assert.equal(healthResponse.status, 200);
 assert.equal(health.status, "ok");
-assert.equal(health.version, "0.3.0");
+assert.equal(health.version, packageJson.version);
 assert.equal(health.checks.d1.status, "ok");
 assert.ok(["ok", "unavailable"].includes(health.checks.model.status));
 
