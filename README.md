@@ -2,7 +2,7 @@
 
 MetricGround 面向使用 Excel/CSV 完成常见经营分析的初级数据分析师，提供数据理解、质量检查、指标口径确认、受控计算和结果验证。通用上传数据支持本地 Agent 规划、人工确认、确定性执行、TaskRun 状态追踪与证据导出；Olist 只作为内置演示数据，不再替代用户上传文件的分析结果。
 
-> **交付状态（2026-10-09）**：`v0.3.0` 本地门禁已通过，并已发布到 [受保护的 Sites 演示环境](https://metricground.chirpyseed1.chatgpt.site)。托管环境强制登录，远程 D1 已建立 4 张运行表；登录后的上传、规划、批准、计算、DuckDB-WASM 复核、证据导出、同浏览器刷新恢复及 Web/D1 健康检查 7/7 通过。通用工作台固定任务 30/30 通过，5 份合成新人测试文件均可读取；项目所有者已手工走通其中 3 份。这仍不等于 3 名真实目标用户测试；第二身份隔离实测、GitHub 远程 CI 和集中告警尚未完成。
+> **交付状态（2026-10-09）**：`v0.3.0` 本地门禁已通过，代码已发布到 [GitHub](https://github.com/LMM1234556/metricground)，并部署到 [受保护的 Sites 演示环境](https://metricground.chirpyseed1.chatgpt.site)。GitHub Actions 的静态质量门和完整浏览器回归均已真实运行通过；线上登录、计算、DuckDB-WASM 复核、证据导出、同浏览器恢复及 Web/D1 健康检查 7/7 通过。这仍不等于生产级上线或真实目标用户测试；第二身份隔离实测、集中告警和值班流程尚未完成。
 
 ![MetricGround 核心经营指标界面](docs/images/overview.png)
 
@@ -180,17 +180,19 @@ scripts/              Olist 数据复算和基线启动脚本
 - `npm run test:ci:static`：代码规范、类型、构建和不依赖运行服务的确定性测试；
 - `npm run test:ci:browser`：在生产构建的本地预览和 Chromium 调试端口上运行 API 场景、文件、质量、计算、关联和新人引导回归。
 
-版本变化见 [CHANGELOG](CHANGELOG.md)，当前基线见 [v0.3.0 版本说明](docs/releases/v0.3.0.md)，本地门禁证据见 [v0.3.0 发布验证](evaluation/release-validation-v0.3.0-2026-10-08.md)，私有部署证据见 [Sites 部署验证](evaluation/private-deployment-validation-2026-10-09.md)，生产化边界和验收标准见 [生产化与迭代路线](docs/production_roadmap.md)。远程 CI 没有实际运行通过前，不应把工作流配置描述成“CI 已通过”。
+版本变化见 [CHANGELOG](CHANGELOG.md)，当前基线见 [v0.3.0 版本说明](docs/releases/v0.3.0.md)，本地门禁证据见 [v0.3.0 发布验证](evaluation/release-validation-v0.3.0-2026-10-08.md)，远程流水线证据见 [GitHub CI 验证](evaluation/remote-ci-validation-2026-10-09.md)，私有部署证据见 [Sites 部署验证](evaluation/private-deployment-validation-2026-10-09.md)，生产化边界和验收标准见 [生产化与迭代路线](docs/production_roadmap.md)。
 
 ## 项目边界与后续计划
 
-当前版本仍是 MVP，不是生产级企业数据平台。页面已支持字段画像、质量检查、清洗派生副本、口径合同、计数/求和/平均/条件比例、分组、趋势、Top N、TaskRun、证据导出，以及最多三张表的受控关联。TaskRun 已持久化，刷新可恢复；受保护演示环境已启用托管身份强制认证，但角色权限和团队空间尚未实现，原始数据也不会跨设备同步。主计算仍在浏览器确定性引擎内完成，DuckDB-WASM 从同一数据版本使用独立 SQL 复算；这能发现计算实现、行数范围和边界不一致，但不能替代业务口径确认，也不是对源数据真实性的外部审计。当前比例不支持任意两个聚合量之比；数据库源连接、服务端文件存储、集中告警、远程 CI 和正式目标用户测试仍未完成。
+当前版本仍是 MVP，不是生产级企业数据平台。页面已支持字段画像、质量检查、清洗派生副本、口径合同、计数/求和/平均/条件比例、分组、趋势、Top N、TaskRun、证据导出，以及最多三张表的受控关联。TaskRun 已持久化，刷新可恢复；受保护演示环境已启用托管身份强制认证，但角色权限和团队空间尚未实现，原始数据也不会跨设备同步。主计算仍在浏览器确定性引擎内完成，DuckDB-WASM 从同一数据版本使用独立 SQL 复算；这能发现计算实现、行数范围和边界不一致，但不能替代业务口径确认，也不是对源数据真实性的外部审计。当前比例不支持任意两个聚合量之比；数据库源连接、服务端文件存储、集中告警和正式目标用户测试仍未完成。
 
-交付入口见 `docs/release_handoff.md`。下一阶段计划：创建 GitHub 远程仓库并让远程 CI 实际通过，随后补第二身份隔离实测、接入最小失败告警，并邀请 5 名目标用户完成无指导任务测试。之后只根据真实失败点决定是否增加通用比例、非常规金额字段指定和复杂 Excel 支持。当前自动化任务验收见 `evaluation/junior_analyst_task_assessment.md`，现状与边界以 `docs/capability_matrix.md` 为准；旧差距审计仅保留为历史快照。
+交付入口见 `docs/release_handoff.md`。下一阶段计划：补第二身份隔离实测、接入最小失败告警，并邀请 5 名目标用户完成无指导任务测试。之后只根据真实失败点决定是否增加通用比例、非常规金额字段指定和复杂 Excel 支持。当前自动化任务验收见 `evaluation/junior_analyst_task_assessment.md`，现状与边界以 `docs/capability_matrix.md` 为准；旧差距审计仅保留为历史快照。
 
 ## 上游说明
 
 项目复现 Microsoft Data Formulator 0.7.0（MIT License）作为可视化探索基线，并参考其交互思路。当前 MetricGround 前端、质量规则、口径合同、清洗闭环、受控计算和评测为独立实现，运行时不依赖 Data Formulator 服务。
+
+本仓库目前公开可见，但尚未选择开源许可证；公开访问不等于授予复制、修改或再分发权。
 
 - Microsoft Data Formulator: https://github.com/microsoft/data-formulator
 - 固定基线依赖：`data-formulator==0.7.0`
