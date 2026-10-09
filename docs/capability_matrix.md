@@ -20,9 +20,9 @@ MetricGround 面向使用 Excel/CSV 完成常见经营分析的初级数据分�
 | `AnalysisSpec` | 已完成 | `verify-agent-foundation.mjs` | 当前为项目内部协议，不是外部行业标准 |
 | `TaskRun` 状态机与持久化 | 已完成 | `verify-agent-runtime.mjs`、`verify-task-persistence.mjs`、`verify-workspace-recovery.mjs` | D1 保存审计元数据，IndexedDB 保存当前浏览器工作区；跨设备仍需重传原始文件 |
 | API 基础防护 | 已完成本地验收 | `verify-task-persistence.mjs` | D1 固定窗口限流、同源写入、请求体上限和安全头；不是企业级 WAF |
-| 身份与 TaskRun 隔离 | 已部署、待完整烟雾测试 | 本地跨用户 404；Sites 环境变量修订 1 已启用 `METRICGROUND_REQUIRE_AUTH=true` | 托管登录门已启用，但尚未保留登录后 TaskRun 全流程的线上操作记录；无角色权限模型 |
+| 身份与 TaskRun 隔离 | 已部署并完成所有者主流程烟测 | 本地跨用户 404；线上强制登录；TaskRun 修订 1—3、所有者绑定和刷新恢复记录 | 线上只验证当前所有者，尚无第二身份的跨用户隔离实测；无角色权限模型 |
 | D1 备份恢复 | 已完成本地演练 | `verify-d1-recovery.mjs`、运行时 SHA-256 清单 | 尚未验证远程 D1 的定时备份、保留策略和灾备时限 |
-| 健康检查与日志 | 已部署基础能力 | `/api/health`、结构化 API 日志、Sites Worker 日志 | 发布后错误查询为 0；尚未完成登录后的健康检查烟雾测试、主动告警和值班流程 |
+| 健康检查与日志 | 已部署基础能力 | `/api/health`、结构化 API 日志、Sites Worker 日志 | 主流程日志已核验且最近错误查询为 0；尚未直接访问线上健康检查，也无主动告警和值班流程 |
 | 双表/三表受控关联 | 已完成 | `verify-controlled-join.mjs`、`verify-multi-table-ui.mjs`、`verify-three-table-wizard.mjs` | 最多三表；等值单键/双字段复合键；`N:N` 默认禁止 |
 | 关联金额对账 | 已完成常见金额字段 | `verify-join-reconciliation-ui.mjs` | 自动识别常见金额字段名；非常规字段名尚缺人工指定入口 |
 | 证据包导出 | 已完成 | `verify-evidence-package.mjs` | 不含原始数据行；尚无服务端历史审计库 |
@@ -30,7 +30,7 @@ MetricGround 面向使用 Excel/CSV 完成常见经营分析的初级数据分�
 | 本地/云模型降级 | 已完成 | `verify-model-providers.mjs` | 云模型需要用户主动配置；模型不接收原始明细行 |
 | 新人引导自动化验收 | 已完成 | `verify-novice-guide.mjs` 24/24；5 份测试文件均可读取 | 只能证明流程闭环，不代表真实新人理解和独立完成 |
 | 正式目标用户研究 | 进行前准备完成 | 测试方案、观察表和 5 份合成文件已完成；项目所有者手工走通 3/5 份 | 尚无 5 名独立目标用户数据，不能声称“新人测试通过” |
-| 远程仓库与受保护部署 | 部分完成 | 私有 Sites 版本 2 已成功；`evaluation/private-deployment-validation-2026-10-09.md` | 无 GitHub 远程仓库和远程 CI 成功记录；站点为 owner-only 演示，不是公开生产服务 |
+| 远程仓库与受保护部署 | 部分完成 | 私有 Sites 版本 2；登录后核心分析主链路烟测；`evaluation/private-deployment-validation-2026-10-09.md` | 无 GitHub 远程仓库和远程 CI 成功记录；站点为 owner-only 演示，不是公开生产服务 |
 | 数据库、权限、多人协作 | 部分完成 | D1 持久化、幂等并发控制、条件式所有者隔离 | 无任务历史 UI、角色权限、团队空间和企业治理，不应描述为企业级数据平台 |
 
 ## 面试时可以陈述的结论
@@ -42,8 +42,9 @@ MetricGround 面向使用 Excel/CSV 完成常见经营分析的初级数据分�
 
 ## 下一阶段
 
-1. 由项目所有者登录私有站点，完成首页、`/api/session`、`/api/health`、TaskRun 写入和刷新恢复烟雾测试；
-2. 创建 GitHub 远程仓库并让远程 CI 实际通过；
-3. 在现有 Worker 日志检索基础上接入失败告警；
-4. 邀请 5 名目标用户进行无指导任务测试；
-5. 根据用户失败点决定是否补通用比例、非常规金额字段指定和复杂 Excel 支持。
+1. 由项目所有者直接访问线上 `/api/health`，保存 Web、D1 与可选模型状态；
+2. 使用第二个身份验证跨用户 TaskRun 不可见，避免把本地隔离测试等同于线上多用户验证；
+3. 创建 GitHub 远程仓库并让远程 CI 实际通过；
+4. 在现有 Worker 日志检索基础上接入失败告警；
+5. 邀请 5 名目标用户进行无指导任务测试；
+6. 根据用户失败点决定是否补通用比例、非常规金额字段指定和复杂 Excel 支持。

@@ -59,7 +59,7 @@ npm run test:release:browser
 - 正式目标用户测试：尚未完成；
 - 本地 Git 提交与标签：已建立；GitHub 远程和远程 CI：尚未创建或运行。
 - 受保护部署：Sites 版本 2 成功，地址为 `https://metricground.chirpyseed1.chatgpt.site`；强制登录变量和远程 D1 表已核实。
-- 线上验收：发布状态和 Worker/D1 控制面已验证；登录后的首页、健康检查、TaskRun 写入和刷新恢复仍需项目所有者完成烟雾测试。
+- 线上验收：登录、上传、规划、批准、计算、DuckDB-WASM 复核、证据导出和同浏览器刷新恢复已通过；TaskRun 修订 1—3、幂等写入和所有者绑定已在 D1 核实。线上 `/api/health` 直接检查仍待完成。
 
 “项目所有者测试 3 份文件”不能写成“3 名新人完成测试”。对外可以陈述：已具备真人测试材料和记录方案，正在进入目标用户验证阶段。
 
@@ -74,7 +74,7 @@ npm run test:release:browser
 
 ## 发布前仍需人工完成
 
-1. 登录受保护 Sites 地址，按 `evaluation/private-deployment-validation-2026-10-09.md` 完成线上烟雾测试并保存结果；
+1. 登录受保护 Sites 地址，直接访问 `/api/health` 并保存 Web、D1 与可选模型状态；
 2. 选择 GitHub 仓库名称与公开/私有属性并推送当前版本，让远程 CI 实际运行；
 3. 确认项目许可证和 Olist 数据展示范围；
 4. 检查提交中不包含 `.env`、API Key、浏览器配置和本地运行日志；
