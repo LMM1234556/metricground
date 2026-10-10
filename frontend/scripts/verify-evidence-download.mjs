@@ -48,7 +48,7 @@ try {
     window.__evidenceRun = null;
     const fetchOriginal = window.fetch;
     window.fetch = async function(input, init) {
-      const url = typeof input === 'string' ? input : input.url;
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
       if (url.includes('/api/task-runs') && init?.method === 'PUT') window.__evidenceRun = JSON.parse(init.body);
       return fetchOriginal.call(this, input, init);
     };
@@ -71,7 +71,7 @@ try {
     const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
     async function waitFor(predicate, label, timeout = 20000) {
       const until = Date.now() + timeout;
-      while (!predicate()) { if (Date.now() > until) throw new Error(label); await sleep(100); }
+      while (!predicate()) { if (Date.now() > until) throw new Error(label + '; persistence=' + document.querySelector('.task-run-persistence')?.textContent + '; capturedRevision=' + window.__evidenceRun?.persistenceRevision); await sleep(100); }
     }
     await waitFor(() => document.querySelector('.profile-card'), 'Profile not ready');
     const textarea = document.querySelector('.query-box textarea');

@@ -284,6 +284,9 @@ export default function Home() {
   const latestTaskRunRef = useRef<TaskRun | null>(null);
   const persistedTaskContentRef = useRef("");
   const persistenceQueueRef = useRef(Promise.resolve());
+  // React state can lag behind a resolved write when the next queued write starts.
+  // Only this page's acknowledged writes advance this map; external conflicts still block.
+  const acknowledgedTaskRevisionsRef = useRef(new Map<string, number>());
 
   useEffect(() => {
     let cancelled = false;
@@ -357,8 +360,12 @@ export default function Home() {
     if (!workspaceHydratedRef.current || !taskRun || !sessionStatus || (sessionStatus.required && !sessionStatus.authenticated)) return;
     const timer = window.setTimeout(() => {
       persistenceQueueRef.current = persistenceQueueRef.current.then(async () => {
-        const candidate = latestTaskRunRef.current;
-        if (!candidate) return;
+        const latest = latestTaskRunRef.current;
+        if (!latest) return;
+        const candidate = {
+          ...latest,
+          persistenceRevision: Math.max(latest.persistenceRevision, acknowledgedTaskRevisionsRef.current.get(latest.id) ?? 0),
+        };
         const contentKey = taskRunContentKey(candidate);
         if (contentKey === persistedTaskContentRef.current) return;
         setPersistence({ status: "saving", message: "正在保存 TaskRun 审计记录…" });
@@ -374,7 +381,8 @@ export default function Home() {
           });
           const result = await response.json() as { run?: TaskRun; current?: TaskRun; error?: string };
           if (response.status === 409) {
-            if (result.current && result.current.updatedAt === candidate.updatedAt) {
+            if (result.current && taskRunContentKey(result.current) === contentKey) {
+              acknowledgedTaskRevisionsRef.current.set(candidate.id, result.current.persistenceRevision);
               setTaskRun((current) => current?.id === candidate.id
                 ? { ...current, persistenceRevision: result.current!.persistenceRevision }
                 : current);
@@ -386,6 +394,7 @@ export default function Home() {
             return;
           }
           if (!response.ok || !result.run) throw new Error(result.error ?? `HTTP ${response.status}`);
+          acknowledgedTaskRevisionsRef.current.set(candidate.id, result.run.persistenceRevision);
           persistedTaskContentRef.current = contentKey;
           setTaskRun((current) => current?.id === candidate.id
             ? { ...current, persistenceRevision: result.run!.persistenceRevision }
