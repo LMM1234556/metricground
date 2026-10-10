@@ -3,7 +3,7 @@ import { hasToolCall, isStepCount, ToolLoopAgent, tool } from "ai";
 import { z } from "zod";
 import {
   AGENT_TOOLS, AgentPlan, DatasetAgentContext, isDistinctCountQuestion,
-  inferStrongAnalysisType, isJoinAmountRiskQuestion, keepRelevantFieldBindings, resolveAgentAnalysisType,
+  inferStrongAnalysisType, isJoinAmountRiskQuestion, isRowCountDifferenceQuestion, keepRelevantFieldBindings, resolveAgentAnalysisType,
 } from "../../../lib/agent-plan";
 import { enforcePolicyGuards } from "../../../lib/agent-plan-policy";
 import { getAgentProviderCandidates } from "../../../lib/model-provider";
@@ -90,6 +90,25 @@ function fallbackPlan(question: string, context: DatasetAgentContext): AgentPlan
     tools: ["profile_dataset", "run_quality_checks"],
     steps: ["查看当前数据版本与质量证据", "核对源表和关联关系", "检查重复来源行、排除行和金额差额", "人工确认安全粒度后再计算"], nextView: "多表关联",
   };
+  if (isRowCountDifferenceQuestion(question)) {
+    const field = context.fields.find((candidate) => candidate.name === entity);
+    const inconsistent = Boolean(field && field.uniqueCount > context.rowCount);
+    const equal = Boolean(field && field.uniqueCount === context.rowCount && field.missingRate === 0);
+    return {
+      ...base, action: "clarify", analysisType: "quality",
+      summary: inconsistent
+        ? "当前画像的行数与唯一值摘要不一致，请重新检查数据版本与画像。"
+        : field
+          ? `根据当前画像：${context.rowCount} 行，${field.name} 的非空唯一值为 ${field.uniqueCount} 个。${equal ? "本次画像未发现行数与该字段对象数的差异。" : "行数与对象数不同，不等于这些明细都应删除。"}`
+          : "已识别数据行数与业务对象数的比较需求，需要先确认统计字段。",
+      clarification: equal
+        ? "如果你看到不同的计算结果，请核对统计范围和数据版本，再按同一口径复算。"
+        : "请确认一行代表一笔订单还是一条订单明细，并核对空编号、重复编号和完全重复记录。统计订单通常按确认的订单编号去重；不要未经核实就删除同编号明细。",
+      tools: ["profile_dataset", "run_quality_checks"],
+      steps: ["查看行数与候选标识字段摘要", "核对缺失与重复证据", "人工确认数据粒度", "选择口径并复算验证"],
+      nextView: inconsistent ? "画像" : "质量检查",
+    };
+  }
   if (intent === "quality" || (!intent && /异常|缺失|重复|可用/i.test(question))) return {
     ...base, action: "ready", analysisType: "quality", summary: `先检查 ${context.fileName} 的质量风险。`,
     clarification: null, tools: ["profile_dataset", "run_quality_checks"],
@@ -175,7 +194,7 @@ function planFromDecision(input: z.infer<typeof decisionInputSchema>, question: 
     top_n: "排名前五",
     unsupported: "预测模型",
   };
-  const base = fallbackPlan(analysisType === "metric" || isJoinAmountRiskQuestion(question) ? question : intentPrompt[analysisType], context);
+  const base = fallbackPlan(analysisType === "metric" || isJoinAmountRiskQuestion(question) || isRowCountDifferenceQuestion(question) ? question : intentPrompt[analysisType], context);
   const candidateBindings = {
     entityField: isCountMetric ? preferredEntityField(question, context) : input.entityField.trim() || base.fieldBindings.entityField,
     valueField: isCountMetric ? null : input.valueField.trim() || base.fieldBindings.valueField,

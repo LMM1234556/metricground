@@ -90,5 +90,15 @@ assert.equal(average.fieldBindings.valueField, "amount", "平均金额不能被�
 const absentIdentifier = await plan("统计 missing_id 的去重数量");
 assert.equal(absentIdentifier.action, "clarify");
 assert.equal(absentIdentifier.fieldBindings.entityField, null);
+const rowDifference = await plan("为什么表的行数比订单数多？", {
+  ...dataset, fields: dataset.fields.map((field) => field.name === "order_id" ? { ...field, uniqueCount: 2 } : field),
+});
+assert.equal(rowDifference.analysisType, "quality");
+assert.match(rowDifference.summary, /3 行/);
+assert.match(rowDifference.summary, /2 个/);
+assert.match(rowDifference.clarification, /订单明细/);
+assert.ok(!rowDifference.tools.includes("execute_metric"));
+const noDifference = await plan("为什么表的行数比订单数多？");
+assert.match(noDifference.summary, /未发现/);
 
-console.log(JSON.stringify({ passed: true, cases: 9, source: "policy-router", scope: "实际 API 路由与字段绑定回归，不代表模型准确率" }, null, 2));
+console.log(JSON.stringify({ passed: true, cases: 11, source: "policy-router", scope: "实际 API 路由与字段绑定回归，不代表模型准确率" }, null, 2));

@@ -67,6 +67,12 @@ export function isJoinAmountRiskQuestion(question: string) {
     && /放大|变多|变大|多了|增加|翻倍|重复|对不上|不一致/i.test(question);
 }
 
+export function isRowCountDifferenceQuestion(question: string) {
+  return /行数|记录数|数行|明细数/i.test(question)
+    && /订单数|订单量|对象数|去重|唯一/i.test(question)
+    && /不一样|不一致|不同|多|少|为什么|为何|区别|差异/i.test(question);
+}
+
 export function isRankingQuestion(question: string) {
   return /前\s*(?:\d+|[一二三四五六七八九十百]+)|top\s*\d+|排名|最高|最低/i.test(question)
     || /(?:谁|哪(?:个|些|里|家|类|种)).{0,24}(?:最多|最少|最大|最小)/i.test(question)
@@ -76,7 +82,7 @@ export function isRankingQuestion(question: string) {
 export function inferStrongAnalysisType(question: string): AgentAnalysisType | null {
   if (/预测|forecast|机器学习|回归|聚类/i.test(question)) return "unsupported";
   if (/清洗|去除重复(?:行|记录|数据)?|删除重复(?:行|记录|数据)?|数据去重|处理缺失|修复日期/i.test(question)) return "cleaning";
-  if (isJoinAmountRiskQuestion(question)
+  if (isJoinAmountRiskQuestion(question) || isRowCountDifferenceQuestion(question)
     || (!isDistinctCountQuestion(question) && /重复(?:的)?(?:订单|记录|编号)|(?:订单|记录|编号).{0,8}重复/i.test(question))
     || /质量|检查.*(?:异常|缺失|重复)|有哪些.*(?:问题|风险)|能不能用|是否可用|重复统计|算重复|多算|重复值|完全重复/i.test(question)) return "quality";
   if (/数据画像|字段结构|字段类型|多少行|多少列|查看字段/i.test(question)) return "profile";
