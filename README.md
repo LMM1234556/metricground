@@ -2,7 +2,7 @@
 
 MetricGround 面向使用 Excel/CSV 完成常见经营分析的初级数据分析师，提供数据理解、质量检查、指标口径确认、受控计算和结果验证。通用上传数据支持本地 Agent 规划、人工确认、确定性执行、TaskRun 状态追踪与证据导出；Olist 只作为内置演示数据，不再替代用户上传文件的分析结果。
 
-> **交付状态（2026-10-10）**：`v0.3.5` 已部署到 [公开新人测试环境](https://metricground.chirpyseed1.chatgpt.site)，Sites 版本 9。修复云请求在真实 Worker 中的重定向兼容问题，并启用受限 qwen-plus 试验：明确意图优先规则，未匹配表述可交给云模型；全站累计仍限二十次请求。一个公网真实模型规划探针及 D1计数核验通过，检查时剩十七次请求；完整 CI、十个线上规则探针和匿名隔离通过。详见 [公网试验记录](evaluation/public-cloud-trial-v0.3.5-2026-10-10.md)。本轮网页人工批准/计算/下载完整云模型链路尚未验收，不宣称任意自然语言准确率或生产 SLA。
+> **交付状态（2026-10-10）**：`v0.3.6` 已部署到 [公开新人测试环境](https://metricground.chirpyseed1.chatgpt.site)，Sites 版本 10。根据实际交付文件补齐报告口径、风险判断快照、规划来源、精确聚合结果、完整 DuckDB SQL 与参数，并修复连续导出触发的保存竞态。[完整 CI 38052790794](https://github.com/LMM1234556/metricground/actions/runs/38052790794) 已通过，包含同任务报告/JSON 下载、持久化、刷新恢复及匿名隔离；详见 [本轮验收记录](evaluation/evidence-export-v0.3.6-2026-10-10.md)。受限 qwen-plus 开关与全站累计二十次请求限制保持不变，本轮没有新增付费模型请求；旧任务缺失信息不会回填，不宣称任意自然语言准确率或生产 SLA。
 
 ![MetricGround 核心经营指标界面](docs/images/overview.png)
 
