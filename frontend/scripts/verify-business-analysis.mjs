@@ -45,6 +45,16 @@ const result = await evaluate(`(async () => {
     if (Date.now() > deadline) throw new Error('Timed out waiting for uploaded profile');
     await sleep(80);
   }
+  const qualityTab = [...document.querySelectorAll('.profile-tabs button')].find((button) => button.textContent.includes('质量检查'));
+  if (!qualityTab) throw new Error('Missing quality review tab');
+  qualityTab.click();
+  await sleep(100);
+  for (const issue of document.querySelectorAll('.quality-issue')) {
+    const keep = [...issue.querySelectorAll('button')].find((button) => button.textContent.includes('暂不处理'));
+    if (!keep) throw new Error('Missing quality decision control');
+    keep.click();
+    await sleep(40);
+  }
   const textarea = document.querySelector('.query-box textarea');
   const textareaSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
   const select = (label, value) => {
