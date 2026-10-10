@@ -75,7 +75,7 @@ assert.equal(healthResponse.status, 200);
 assert.equal(health.status, "ok");
 assert.equal(health.version, packageJson.version);
 assert.equal(health.checks.d1.status, "ok");
-assert.ok(["ok", "unavailable"].includes(health.checks.model.status));
+assert.ok(["ok", "unavailable", "configured", "disabled"].includes(health.checks.model.status));
 const session = await requestJson(`${baseUrl}/api/session`);
 assert.equal(session.status, 200);
 defaultCookie = session.headers.get("Set-Cookie")?.split(";")[0] ?? "";

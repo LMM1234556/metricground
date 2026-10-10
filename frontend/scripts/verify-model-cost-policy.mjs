@@ -20,7 +20,7 @@ const fetchImpl = async (_url, init) => {
   const payload = JSON.parse(init.body);
   assert.equal(payload.enable_thinking, false);
   assert.equal(payload.max_tokens, 512);
-  assert.equal(init.redirect, "error");
+  assert.equal(init.redirect, "manual");
   return Response.json({ usage: { prompt_tokens: 100, completion_tokens: 25 } });
 };
 const url = provider.baseURL + "/chat/completions";
@@ -44,7 +44,7 @@ const unavailable = createBudgetedModelFetch({ provider, reserve: async () => { 
 await assert.rejects(() => unavailable(url, request), /MODEL_BUDGET_UNAVAILABLE/);
 assert.equal(network, 2, "Database failure blocks outgoing network requests");
 const failed = createBudgetedModelFetch({ provider, reserve, record, fetchImpl: async () => { network++; throw new Error("Sensitive provider diagnostic"); } });
-await assert.rejects(() => failed(url, request), /MODEL_REQUEST_FAILED/);
+await assert.rejects(() => failed(url, request), /MODEL_NETWORK_FAILED/);
 assert.equal(reservations, 3, "Failed requests still consume reservations");
 assert.equal(network, 3, "No automatic retry inside fetch guard");
 assert.equal(receipts.at(-1).status, "failed");
@@ -52,5 +52,13 @@ assert.ok(!JSON.stringify(receipts).includes("Sensitive"));
 const denied = createBudgetedModelFetch({ provider: { ...provider, id: "groq" }, reserve, record, fetchImpl });
 await assert.rejects(() => denied(url, request), /CLOUD_MODEL_NOT_APPROVED/);
 assert.equal(network, 3);
+const redirectReceipts = [];
+let redirectRequests = 0;
+const redirect = createBudgetedModelFetch({ provider, reserve,
+  record: async (receipt) => redirectReceipts.push(receipt),
+  fetchImpl: async (_url, init) => { redirectRequests++; assert.equal(init.redirect, "manual"); return new Response(null, { status: 302, headers: { Location: "https://unapproved.example/" } }); } });
+await assert.rejects(() => redirect(url, request), /MODEL_REDIRECT_BLOCKED/);
+assert.equal(redirectRequests, 1, "No request or credentials forwarded to redirect destination");
+assert.equal(redirectReceipts[0].status, "redirect_blocked");
 db.close();
 console.log(JSON.stringify({ passed: true, globalReservations: 20, outboundBoundaryChecks: 12, automaticRetries: 0, scope: "Synthetic SQL/fetch checks; not cloud accuracy or a currency budget guarantee" }));

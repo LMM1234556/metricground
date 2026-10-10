@@ -89,17 +89,26 @@ export function createBudgetedModelFetch({ provider, reserve, record, fetchImpl 
     const id = await reserve(); // D1 must succeed before any provider network request.
     const started = Date.now();
     const timeout = AbortSignal.timeout(MODEL_TRIAL_LIMITS.timeoutMs);
+    let response: Response;
     try {
-      const response = await fetchImpl(input, {
-        ...init, body: boundedBody, redirect: "error",
+      response = await fetchImpl(input, {
+        ...init, body: boundedBody, redirect: "manual",
         signal: init.signal ? AbortSignal.any([init.signal, timeout]) : timeout,
       });
-      const usage = await usageFromResponse(response);
-      await record({ id, status: `http_${response.status}`, ...usage, durationMs: Date.now() - started });
-      return response;
     } catch {
       await record({ id, status: "failed", inputTokens: null, outputTokens: null, durationMs: Date.now() - started });
-      throw new ModelCostPolicyError("MODEL_REQUEST_FAILED");
+      throw new ModelCostPolicyError("MODEL_NETWORK_FAILED");
     }
+    // Workers can reject redirect:error even where Node supports it. Manual mode
+    // prevents forwarding Authorization; reject the response without following Location.
+    if (response.status >= 300 && response.status < 400) {
+      void response.body?.cancel().catch(() => undefined);
+      await record({ id, status: "redirect_blocked", inputTokens: null, outputTokens: null, durationMs: Date.now() - started });
+      throw new ModelCostPolicyError("MODEL_REDIRECT_BLOCKED");
+    }
+    const usage = await usageFromResponse(response);
+    // Storage failures are distinct from network failures, with the reservation retained.
+    await record({ id, status: `http_${response.status}`, ...usage, durationMs: Date.now() - started });
+    return response;
   };
 }
