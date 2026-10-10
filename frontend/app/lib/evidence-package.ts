@@ -102,19 +102,31 @@ function checksum(value: unknown) {
 }
 
 export function buildEvidencePackage(run: TaskRun, exportedAt = new Date().toISOString()): EvidencePackage {
+  // A completed analysis is an immutable evidence snapshot. Download actions are
+  // still recorded on the persisted TaskRun, but they must not change the
+  // report/JSON contents or make two formats from one run disagree.
+  const completedAt = run.state === "COMPLETED"
+    ? [...run.events].reverse().find((event) => event.to === "COMPLETED")?.at ?? run.updatedAt
+    : null;
+  const evidenceRun = completedAt ? {
+    ...run,
+    updatedAt: completedAt,
+    toolCalls: run.toolCalls.filter((call) => call.tool !== "export_evidence"),
+  } : run;
+  const snapshotAt = completedAt ?? exportedAt;
   const withoutIntegrity = {
     format: "metricground-evidence" as const,
     version: "1.1" as const,
-    exportedAt,
-    task: { id: run.id, question: run.question, state: run.state, createdAt: run.createdAt, updatedAt: run.updatedAt },
-    datasets: run.datasetVersions,
-    plan: run.plan,
-    analysisSpec: run.analysisSpec,
-    planningEvidence: run.planningEvidence ?? null,
-    qualityEvidence: run.qualityEvidence ?? null,
-    resultEvidence: run.resultEvidence ?? null,
-    approvals: run.approvals,
-    toolCalls: run.toolCalls.map((call) => ({
+    exportedAt: snapshotAt,
+    task: { id: evidenceRun.id, question: evidenceRun.question, state: evidenceRun.state, createdAt: evidenceRun.createdAt, updatedAt: evidenceRun.updatedAt },
+    datasets: evidenceRun.datasetVersions,
+    plan: evidenceRun.plan,
+    analysisSpec: evidenceRun.analysisSpec,
+    planningEvidence: evidenceRun.planningEvidence ?? null,
+    qualityEvidence: evidenceRun.qualityEvidence ?? null,
+    resultEvidence: evidenceRun.resultEvidence ?? null,
+    approvals: evidenceRun.approvals,
+    toolCalls: evidenceRun.toolCalls.map((call) => ({
       id: call.id,
       tool: call.tool,
       status: call.status,
@@ -124,10 +136,10 @@ export function buildEvidencePackage(run: TaskRun, exportedAt = new Date().toISO
       outputSummary: call.outputSummary,
       error: call.error,
     })),
-    validationSummary: run.validationSummary,
-    resultSummary: run.resultSummary,
-    failure: run.failure,
-    events: run.events,
+    validationSummary: evidenceRun.validationSummary,
+    resultSummary: evidenceRun.resultSummary,
+    failure: evidenceRun.failure,
+    events: evidenceRun.events,
     privacy: {
       rawRowsIncluded: false as const,
       statement: "证据包包含数据版本、结构化口径、聚合结果、质量风险与判断、规划来源、工具摘要和复核 SQL，不包含 Excel/CSV 原始数据行。筛选参数与分组名称可能包含业务信息，请确认后分享。",
@@ -253,7 +265,7 @@ export function evidenceAsMarkdown(evidence: EvidencePackage) {
     `- 任务：${evidence.task.question}`,
     `- 状态：${evidence.task.state}`,
     `- 任务编号：${evidence.task.id}`,
-    `- 导出时间：${evidence.exportedAt}`,
+    `- 证据快照时间：${evidence.exportedAt}`,
     `- 完整性校验：${evidence.integrity.algorithm} / ${evidence.integrity.checksum}`,
     "",
     "## 数据版本",

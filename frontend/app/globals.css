@@ -710,6 +710,8 @@ button { cursor:pointer; }
 .execution-blocker svg { flex:0 0 auto; margin-top:1px; }
 .execution-blocker strong { font-size:9.5px; }
 .execution-blocker p { margin:3px 0 0; font-size:8px; line-height:1.5; }
+.quality-execution-blocker button { margin-top:7px; padding:5px 8px; border:1px solid #dca6b2; border-radius:6px; color:#8c2f43; background:#fff; font-size:8px; font-weight:650; }
+.quality-execution-blocker button:hover { background:#fff7f8; }
 .answer-card { overflow:hidden; border:1px solid #dfe6f0; border-radius:15px; background:white; box-shadow:0 10px 34px rgba(28,45,74,.045); }
 .answer-header { padding:14px 18px; border-bottom:1px solid #e8edf3; }
 .assistant-icon { display:grid; width:32px; height:32px; margin-right:10px; place-items:center; border-radius:9px; color:#1d4ed8; background:#e9f1ff; }

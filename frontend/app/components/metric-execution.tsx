@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, Check, Code2, DatabaseZap, Play, ShieldCheck } from "lucide-react";
 import type { MetricContract } from "../lib/metric-contract";
 import type { DatasetProfile } from "../lib/tabular-profile";
+import type { ExecutionGate } from "../lib/execution-gate";
 import {
   buildExecutionPlan, createExecutionConfig, executeMetricContract, FILTER_OPERATORS,
   type ExecutionConfig, type ExecutionResult, type FilterRule,
@@ -12,6 +13,7 @@ import {
 type Props = {
   contract: MetricContract | null;
   profile: DatasetProfile;
+  qualityGate?: ExecutionGate;
   onExecution?: (event: MetricExecutionLifecycleEvent) => void;
   onReviewEvidence?: () => void;
 };
@@ -22,7 +24,7 @@ export type MetricExecutionLifecycleEvent =
 
 type CodeTab = "SQL" | "pandas";
 
-export default function MetricExecution({ contract, profile, onExecution, onReviewEvidence }: Props) {
+export default function MetricExecution({ contract, profile, qualityGate, onExecution, onReviewEvidence }: Props) {
   const [config, setConfig] = useState<ExecutionConfig>(() => createExecutionConfig(profile));
   const [codeTab, setCodeTab] = useState<CodeTab>("SQL");
   const [result, setResult] = useState<ExecutionResult | null>(null);
@@ -51,6 +53,11 @@ export default function MetricExecution({ contract, profile, onExecution, onRevi
   }
 
   async function execute() {
+    if (qualityGate && !qualityGate.ready) {
+      setExecutionError(qualityGate.message);
+      qualityGate.onReview?.();
+      return;
+    }
     if (!contract || !plan?.ready) {
       setExecutionError(plan?.errors.join("；") || "请先生成指标合同。");
       return;
@@ -161,6 +168,12 @@ export default function MetricExecution({ contract, profile, onExecution, onRevi
         </div>
       )}
 
+      {qualityGate && !qualityGate.ready && (
+        <div className="execution-blocker quality-execution-blocker" role="alert">
+          <AlertCircle size={15} /><div><strong>质量风险尚未完成判断，已阻止执行</strong><p>{qualityGate.message}</p><button type="button" onClick={qualityGate.onReview}>去处理质量风险</button></div>
+        </div>
+      )}
+
       <section className="execution-code">
         <div className="execution-code-heading">
           <div><Code2 size={15} /><strong>等价代码</strong><span>用于复核和迁移，当前预览由本地确定性引擎执行</span></div>
@@ -174,7 +187,7 @@ export default function MetricExecution({ contract, profile, onExecution, onRevi
       {executionError && <div className="execution-error" role="alert"><AlertCircle size={15} />{executionError}</div>}
       <div className="execution-approval">
         <div><strong>执行范围：{profile.rowCount.toLocaleString("zh-CN")} 行本地数据</strong><span>只读计算，不修改或上传原文件；筛选参数不会拼接为任意 SQL。</span></div>
-        <button type="button" onClick={execute} disabled={verifying || !plan?.ready || Boolean(amountReconciliationRisk) || (contract.metricType === "ratio" && !ratioRuleConfirmed)}><Play size={15} />{verifying ? "DuckDB 复核中…" : "批准并执行预览"}</button>
+        <button type="button" onClick={execute} disabled={verifying || !plan?.ready || Boolean(amountReconciliationRisk) || Boolean(qualityGate && !qualityGate.ready) || (contract.metricType === "ratio" && !ratioRuleConfirmed)}><Play size={15} />{verifying ? "DuckDB 复核中…" : "批准并执行预览"}</button>
       </div>
 
       {result && (

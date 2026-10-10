@@ -80,6 +80,9 @@ try {
     document.querySelector('.query-box').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await waitFor(() => document.querySelector('.agent-plan-card.ready, .agent-plan-card.clarify'), 'Plan not ready');
     const tab = text => [...document.querySelectorAll('.profile-tabs button')].find(button => button.textContent.includes(text));
+    document.querySelector('.agent-plan-footer button').click();
+    await waitFor(() => document.querySelector('.business-analysis-confirmation'), 'Business analysis gate not ready');
+    const blockedBeforeQuality = Boolean(document.querySelector('.quality-execution-blocker')) && document.querySelector('.execution-approval button').disabled;
     tab('质量检查').click();
     await sleep(100);
     for (const issue of document.querySelectorAll('.quality-issue')) {
@@ -113,7 +116,7 @@ try {
     const run = window.__evidenceRun;
     const response = await fetch('/api/task-runs?id=' + encodeURIComponent(run.id), { headers: { 'X-Trace-Id': run.traceId } });
     const persisted = await response.json();
-    return { downloads, staleClarification, persistedStatus: response.status, persisted: persisted.run };
+    return { downloads, staleClarification, blockedBeforeQuality, persistedStatus: response.status, persisted: persisted.run };
   })()`);
   const jsonFile = result.downloads.find((file) => file.name.endsWith(".json"));
   const markdownFile = result.downloads.find((file) => file.name.endsWith(".md"));
@@ -122,6 +125,10 @@ try {
   const verification = evidence.toolCalls.find((call) => call.tool === "validate_result").input;
   assert.equal(evidence.version, "1.1");
   assert.equal(verifyEvidencePackage(evidence), true);
+  const reportChecksum = markdownFile.content.match(/完整性校验：fnv1a32-pair-v1 \/ ([0-9a-f]{16})/)?.[1];
+  assert.equal(reportChecksum, evidence.integrity.checksum, "报告与审计 JSON 必须共享同一证据快照校验和");
+  assert(markdownFile.content.includes(`证据快照时间：${evidence.exportedAt}`));
+  assert(!evidence.toolCalls.some((call) => call.tool === "export_evidence"), "下载动作不应进入不可变证据快照");
   assert(jsonFile.name.includes(evidence.task.id) && markdownFile.name.includes(evidence.task.id));
   assert(markdownFile.content.includes(evidence.task.id));
   assert.equal(evidence.analysisSpec.aggregation, "sum");
@@ -139,6 +146,7 @@ try {
   assert(markdownFile.content.includes("暂不处理（未修复）"));
   assert(!jsonFile.content.includes('"O-1001"'), "No original order rows");
   assert.equal(result.staleClarification, false);
+  assert.equal(result.blockedBeforeQuality, true, "质量风险未逐项判断前必须阻止执行");
   assert.equal(result.persistedStatus, 200);
   assert.deepEqual(result.persisted.planningEvidence, evidence.planningEvidence);
   assert.deepEqual(result.persisted.qualityEvidence, evidence.qualityEvidence);

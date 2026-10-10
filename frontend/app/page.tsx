@@ -80,6 +80,21 @@ type QualityDecision = "approved" | "kept";
 type PersistenceStatus = { status: "idle" | "saving" | "saved" | "conflict" | "error"; message: string };
 type SessionStatus = { authenticated: boolean; required: boolean; anonymous?: boolean } | null;
 
+function qualityExecutionStatus(
+  profile: DatasetProfile,
+  decisions: Record<string, QualityDecision>,
+  receipt: CleaningReceipt | null,
+) {
+  const undecided = profile.qualityIssues.filter((issue) => !decisions[issue.id]).length;
+  const approvedRepairable = profile.qualityIssues.filter((issue) => decisions[issue.id] === "approved" && Boolean(issue.supportedRepair)).length;
+  const needsCleaningConfirmation = approvedRepairable > 0 && receipt?.derivedFileName !== profile.fileName;
+  return {
+    ready: undecided === 0 && !needsCleaningConfirmation,
+    undecided,
+    needsCleaningConfirmation,
+  };
+}
+
 type WorkspaceSnapshot = {
   version: 1;
   savedAt: string;
@@ -742,8 +757,21 @@ export default function Home() {
     return createTaskRunFromPlan(datasetProfile, submittedQuery || metricContract?.metricName || "受控指标计算", response, { qualityDecisions });
   }
 
+  function requireQualityExecutionReady() {
+    if (!datasetProfile) return false;
+    const gate = qualityExecutionStatus(datasetProfile, qualityDecisions, cleaningReceipt);
+    if (gate.ready) return true;
+    setProfileView(gate.needsCleaningConfirmation ? "清洗方案" : "质量检查");
+    setAgentNavigationNotice(gate.needsCleaningConfirmation
+      ? "已批准的清洗规则尚未生成并确认派生副本，计算已阻止。"
+      : `还有 ${gate.undecided} 项质量风险未判断，计算已阻止。请逐项记录保留、核实或处理决定。`);
+    window.requestAnimationFrame(() => profileCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    return false;
+  }
+
   function handleBusinessExecution(event: BusinessAnalysisLifecycleEvent) {
     if (!datasetProfile || !agentResponse) return;
+    if (!requireQualityExecutionReady()) return;
     try {
       let next = freshInteractiveRun();
       if (!next) return;
@@ -800,6 +828,7 @@ export default function Home() {
 
   function handleMetricExecution(event: MetricExecutionLifecycleEvent) {
     if (!datasetProfile) return;
+    if (!requireQualityExecutionReady()) return;
     try {
       const response = agentResponse ?? buildManualMetricAgentResponse(event.contract);
       if (!agentResponse) setAgentResponse(response);
@@ -932,11 +961,11 @@ export default function Home() {
       qualityDecisions[issue.id] === "approved" && !issue.supportedRepair
     ).length
     : 0;
-  const needsCleaningConfirmation = approvedRepairableQualityIssues > 0
-    && (!cleaningReceipt || cleaningReceipt.derivedFileName !== datasetProfile?.fileName);
-  const qualityReviewComplete = Boolean(datasetProfile)
-    && (datasetProfile!.qualityIssues.length === 0
-      || (decidedQualityIssues === datasetProfile!.qualityIssues.length && !needsCleaningConfirmation));
+  const qualityGateStatus = datasetProfile
+    ? qualityExecutionStatus(datasetProfile, qualityDecisions, cleaningReceipt)
+    : { ready: false, undecided: 0, needsCleaningConfirmation: false };
+  const needsCleaningConfirmation = qualityGateStatus.needsCleaningConfirmation;
+  const qualityReviewComplete = Boolean(datasetProfile) && qualityGateStatus.ready;
   const analysisCompleted = taskRun?.state === "COMPLETED";
   const currentEvidenceExport = evidenceExport?.taskId === taskRun?.id ? evidenceExport : null;
   const guideCompleted = analysisCompleted && Boolean(currentEvidenceExport);
@@ -1033,6 +1062,14 @@ export default function Home() {
     setProfileView(needsCleaningConfirmation ? "清洗方案" : "指标口径");
     window.requestAnimationFrame(() => profileCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
+
+  const executionQualityGate = {
+    ready: qualityReviewComplete,
+    message: needsCleaningConfirmation
+      ? "已批准的清洗规则还没有生成并确认派生副本。请先完成清洗预览与确认。"
+      : `还有 ${qualityGateStatus.undecided} 项质量风险未判断。请逐项记录保留、核实或处理决定。`,
+    onReview: handleQualityGuideAction,
+  };
 
   function applyUnaffectedQualityRecommendations() {
     if (!metricQualityImpact) return;
@@ -1735,6 +1772,7 @@ export default function Home() {
                   profile={datasetProfile}
                   agentPlan={businessAnalysisPlan}
                   question={submittedQuery}
+                  qualityGate={executionQualityGate}
                   onExecution={handleBusinessExecution}
                 />
               ) : (
@@ -1742,6 +1780,7 @@ export default function Home() {
                   key={metricContract ? `${metricContract.metricName}-${metricContract.formula}` : "locked"}
                   contract={metricContract}
                   profile={datasetProfile}
+                  qualityGate={executionQualityGate}
                   onExecution={handleMetricExecution}
                   onReviewEvidence={() => taskRunRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })}
                 />

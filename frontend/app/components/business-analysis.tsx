@@ -9,11 +9,13 @@ import {
   executeBusinessAnalysis, type BusinessAnalysisConfig, type BusinessAnalysisResult,
 } from "../lib/business-analysis";
 import type { DatasetProfile } from "../lib/tabular-profile";
+import type { ExecutionGate } from "../lib/execution-gate";
 
 type Props = {
   profile: DatasetProfile;
   agentPlan: AgentPlan | null;
   question: string;
+  qualityGate?: ExecutionGate;
   onExecution?: (event: BusinessAnalysisLifecycleEvent) => void;
 };
 
@@ -23,7 +25,7 @@ export type BusinessAnalysisLifecycleEvent =
 
 type CodeTab = "SQL" | "pandas";
 
-export default function BusinessAnalysis({ profile, agentPlan, question, onExecution }: Props) {
+export default function BusinessAnalysis({ profile, agentPlan, question, qualityGate, onExecution }: Props) {
   const [config, setConfig] = useState<BusinessAnalysisConfig>(() => createBusinessAnalysisConfig(profile, agentPlan, question));
   const [confirmed, setConfirmed] = useState(false);
   const [result, setResult] = useState<BusinessAnalysisResult | null>(null);
@@ -54,6 +56,11 @@ export default function BusinessAnalysis({ profile, agentPlan, question, onExecu
   }
 
   async function execute() {
+    if (qualityGate && !qualityGate.ready) {
+      setExecutionError(qualityGate.message);
+      qualityGate.onReview?.();
+      return;
+    }
     if (!confirmed) {
       setExecutionError("请先确认字段业务含义、统计对象和聚合口径。");
       return;
@@ -147,6 +154,12 @@ export default function BusinessAnalysis({ profile, agentPlan, question, onExecu
         </div>
       )}
 
+      {qualityGate && !qualityGate.ready && (
+        <div className="execution-blocker quality-execution-blocker" role="alert">
+          <AlertCircle size={15} /><div><strong>质量风险尚未完成判断，已阻止执行</strong><p>{qualityGate.message}</p><button type="button" onClick={qualityGate.onReview}>去处理质量风险</button></div>
+        </div>
+      )}
+
       <section className="execution-code">
         <div className="execution-code-heading">
           <div><Code2 size={15} /><strong>等价代码</strong><span>用于复核与迁移；页面不执行任意自然语言代码</span></div>
@@ -158,7 +171,7 @@ export default function BusinessAnalysis({ profile, agentPlan, question, onExecu
       {executionError && <div className="execution-error" role="alert"><AlertCircle size={15} />{executionError}</div>}
       <div className="execution-approval">
         <div><strong>执行范围：{profile.rowCount.toLocaleString("zh-CN")} 行本地数据</strong><span>只读分析；无效值会被排除并计数，不会静默当作 0。</span></div>
-        <button type="button" onClick={execute} disabled={verifying || !plan.ready || !confirmed || Boolean(amountReconciliationRisk)}><Play size={15} />{verifying ? "DuckDB 复核中…" : "批准并执行分析"}</button>
+        <button type="button" onClick={execute} disabled={verifying || !plan.ready || !confirmed || Boolean(amountReconciliationRisk) || Boolean(qualityGate && !qualityGate.ready)}><Play size={15} />{verifying ? "DuckDB 复核中…" : "批准并执行分析"}</button>
       </div>
 
       {result && (

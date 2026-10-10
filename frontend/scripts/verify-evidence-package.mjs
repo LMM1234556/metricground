@@ -34,6 +34,8 @@ run = completeTaskTool(started.run, {
 });
 run = recordEvidenceExport(run, "2026-09-20T00:00:04.000Z");
 const evidence = buildEvidencePackage(run, "2026-09-20T00:00:05.000Z");
+const runAfterSecondExport = recordEvidenceExport(run, "2026-09-20T00:00:06.000Z", "markdown");
+const evidenceAfterSecondExport = buildEvidencePackage(runAfterSecondExport, "2026-09-20T00:00:07.000Z");
 const json = evidenceAsJson(evidence);
 const markdown = evidenceAsMarkdown(evidence);
 
@@ -42,7 +44,11 @@ assert.equal(evidence.privacy.rawRowsIncluded, false);
 assert.equal(verifyEvidencePackage(evidence), true);
 assert.equal(evidence.toolCalls.find((call) => call.id === "evidence-call").input.records, "[已移除原始明细数据]");
 assert(!json.includes('"O-1"'), "证据包不得包含原始订单行");
-assert(json.includes("export_evidence"));
+assert(!json.includes("export_evidence"), "下载动作不应改变已完成任务的证据快照");
+assert.equal(evidence.exportedAt, "2026-09-20T00:00:03.000Z", "完成时间应固定为证据快照时间");
+assert.equal(evidence.integrity.checksum, evidenceAfterSecondExport.integrity.checksum, "同一完成任务的连续下载必须具有相同校验和");
+assert.deepEqual(evidenceAfterSecondExport, evidence, "报告和审计 JSON 必须来自同一不可变证据快照");
+assert(markdown.includes("证据快照时间：2026-09-20T00:00:03.000Z"));
 assert(markdown.includes("结果有限且行数勾稽通过"));
 assert(markdown.includes("不包含 Excel/CSV 原始数据行"));
 assert.equal(evidence.version, "1.1");
