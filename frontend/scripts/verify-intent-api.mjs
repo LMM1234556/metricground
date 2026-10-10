@@ -111,5 +111,9 @@ const missingChannel = await plan("哪个渠道的订单金额最多？");
 assert.equal(missingChannel.analysisType, "top_n");
 assert.equal(missingChannel.action, "clarify");
 assert.equal(missingChannel.fieldBindings.groupField, null, "缺少渠道字段时不能使用地区替代");
+const missingRankMeasure = await plan("哪个地区 price 合计最多？");
+assert.equal(missingRankMeasure.analysisType, "top_n");
+assert.equal(missingRankMeasure.action, "clarify");
+assert.equal(missingRankMeasure.fieldBindings.valueField, null);
 
-console.log(JSON.stringify({ passed: true, cases: 14, source: "policy-router", scope: "实际 API 路由与字段绑定回归，不代表模型准确率" }, null, 2));
+console.log(JSON.stringify({ passed: true, cases: 15, source: "policy-router", scope: "实际 API 路由与字段绑定回归，不代表模型准确率" }, null, 2));
