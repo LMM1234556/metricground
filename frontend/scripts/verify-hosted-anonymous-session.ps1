@@ -1,5 +1,6 @@
 param([string]$BaseUrl = 'https://metricground.chirpyseed1.chatgpt.site')
 $ErrorActionPreference = 'Stop'
+$expectedVersion = (Get-Content (Join-Path $PSScriptRoot '../package.json') -Raw | ConvertFrom-Json).version
 
 function Assert-Equal($Actual, $Expected, [string]$Label) {
   if ($Actual -ne $Expected) { throw "$Label : expected $Expected, received $Actual" }
@@ -69,7 +70,7 @@ Assert-Equal $planned.Body.plan.analysisType 'metric' 'count planning type'
 Assert-Equal $planned.Body.plan.fieldBindings.entityField 'order_id' 'count entity binding'
 $health = Invoke-Probe '/api/health' $null
 Assert-Equal $health.Status 200 'public health'
-Assert-Equal $health.Body.version '0.3.2' 'deployed version'
+Assert-Equal $health.Body.version $expectedVersion 'deployed version'
 
 @{ passed = $true; baseUrl = $BaseUrl; checkedAt = [DateTime]::UtcNow.ToString('o'); version = $health.Body.version;
   anonymousSessionsInitialized = $true; loginRequired = $false; anonymousPlanning = 200; missingSession = 401;

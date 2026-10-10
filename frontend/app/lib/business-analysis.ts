@@ -1,4 +1,4 @@
-import type { AgentPlan } from "./agent-plan";
+import { isDistinctCountQuestion, isRankingQuestion, type AgentPlan } from "./agent-plan.ts";
 import type { CellValue, DatasetProfile } from "./tabular-profile";
 import type { IndependentVerification } from "./independent-verification";
 
@@ -143,16 +143,18 @@ function escapeIdentifier(identifier: string) {
 
 function inferAggregation(question: string): BusinessAggregation {
   if (/平均|均值|客单价|人均/i.test(question)) return "average";
+  if (isDistinctCountQuestion(question)) return "count_distinct";
   if (/数量|个数|订单|客户|用户|商品数|去重/i.test(question) && !/金额|销售额|gmv|收入|营收/i.test(question)) return "count_distinct";
   return "sum";
 }
 
 function inferTopN(question: string) {
-  const digit = question.match(/(?:前|top\s*)(\d+)/i)?.[1];
+  const digit = question.match(/(?:前|top)\s*(\d+)/i)?.[1];
   if (digit) return Math.min(50, Math.max(1, Number(digit)));
   const chinese = question.match(/前\s*([一二三四五六七八九十])/i)?.[1];
   const values: Record<string, number> = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 };
-  return chinese ? values[chinese] : 5;
+  if (chinese) return values[chinese];
+  return isRankingQuestion(question) && /谁|哪个|哪家|哪种/i.test(question) ? 1 : 5;
 }
 
 export function createBusinessAnalysisConfig(
@@ -162,17 +164,17 @@ export function createBusinessAnalysisConfig(
 ): BusinessAnalysisConfig {
   const fieldExists = (field: string | null | undefined) => field && profile.columns.some((column) => column.name === field) ? field : "";
   const entity = fieldExists(plan?.fieldBindings.entityField)
-    || profile.columns.find((column) => column.isCandidateKey)?.name
-    || profile.columns[0]?.name
+    || (!plan ? profile.columns.find((column) => column.isCandidateKey)?.name : "")
+    || (!plan ? profile.columns[0]?.name : "")
     || "";
   const value = fieldExists(plan?.fieldBindings.valueField)
-    || profile.columns.find((column) => column.inferredType === "数值" && column.name !== entity)?.name
+    || (!plan ? profile.columns.find((column) => column.inferredType === "数值" && column.name !== entity)?.name : "")
     || "";
   const group = fieldExists(plan?.fieldBindings.groupField)
-    || profile.columns.find((column) => column.inferredType === "文本" && column.name !== entity)?.name
+    || (!plan ? profile.columns.find((column) => column.inferredType === "文本" && column.name !== entity)?.name : "")
     || "";
   const time = fieldExists(plan?.fieldBindings.timeField)
-    || profile.columns.find((column) => column.inferredType === "日期")?.name
+    || (!plan ? profile.columns.find((column) => column.inferredType === "日期")?.name : "")
     || "";
   const analysisType = plan && ["group_compare", "trend", "top_n"].includes(plan.analysisType)
     ? plan.analysisType as BusinessAnalysisType
@@ -186,7 +188,7 @@ export function createBusinessAnalysisConfig(
     timeField: time,
     timeGrain: /季度|按季/i.test(question) ? "quarter" : /按周|周度/i.test(question) ? "week" : /按日|每日|日度/i.test(question) ? "day" : "month",
     limit: inferTopN(question),
-    sortDirection: /最低|最少|倒数/i.test(question) ? "asc" : "desc",
+    sortDirection: /最低|最少|最小|倒数/i.test(question) ? "asc" : "desc",
   };
 }
 

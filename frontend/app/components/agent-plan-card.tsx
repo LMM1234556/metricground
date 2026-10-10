@@ -8,7 +8,7 @@ type Props = {
   loading: boolean;
   completed?: boolean;
   resultSummary?: string | null;
-  onNavigate: (view: "画像" | "质量检查" | "清洗方案" | "指标口径" | "经营分析", plan: AgentPlan) => void;
+  onNavigate: (view: NonNullable<AgentPlan["nextView"]>, plan: AgentPlan) => void;
 };
 
 const TOOL_LABELS = {

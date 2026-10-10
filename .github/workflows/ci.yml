@@ -111,7 +111,7 @@ jobs:
           done
 
       - name: Run agent and data workflow checks
-        run: npm run test:scenarios && npm run test:agent && npm run test:profile && npm run test:quality && npm run test:cleaning && npm run test:metric
+        run: npm run test:scenarios && npm run test:intent:api && npm run test:agent && npm run test:profile && npm run test:quality && npm run test:cleaning && npm run test:metric
 
       - name: Run deterministic execution checks
         run: npm run test:execution && npm run test:execution:mobile && npm run test:workbench

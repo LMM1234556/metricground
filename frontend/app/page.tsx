@@ -681,7 +681,7 @@ export default function Home() {
     runAnalysis(query);
   }
 
-  function navigateFromAgent(view: "画像" | "质量检查" | "清洗方案" | "指标口径" | "经营分析", plan: AgentPlan) {
+  function navigateFromAgent(view: NonNullable<AgentPlan["nextView"]>, plan: AgentPlan) {
     if (view === "指标口径" && plan.analysisType === "metric" && datasetProfile) {
       const bindings = plan.fieldBindings;
       const validField = (field: string | null) => field && datasetProfile.columns.some((column) => column.name === field) ? field : "";
@@ -700,10 +700,12 @@ export default function Home() {
         metricName,
         decisionQuestion: submittedQuery,
         metricType,
-        entityField: validField(bindings.entityField) || current.entityField,
-        valueField: validField(bindings.valueField) || current.valueField,
-        timeField: validField(bindings.timeField) || current.timeField,
-        grainDescription: `一行代表一条业务记录，按 ${validField(bindings.entityField) || current.entityField} 识别统计对象。`,
+        entityField: validField(bindings.entityField),
+        valueField: validField(bindings.valueField),
+        timeField: validField(bindings.timeField),
+        grainDescription: validField(bindings.entityField)
+          ? `一行代表一条业务记录，按 ${validField(bindings.entityField)} 识别统计对象。`
+          : "统计对象字段尚未确定，请根据实际业务含义选择字段并确认数据粒度。",
         grainConfirmed: false,
         definitionConfirmed: false,
       } : current);

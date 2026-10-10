@@ -1,6 +1,6 @@
 {
   "name": "metricground",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
@@ -14,6 +14,8 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern public/duckdb --ignore-pattern runtime --ignore-pattern .browser-test --ignore-pattern .sites-runtime",
     "typecheck": "tsc --noEmit",
     "test:core": "node --experimental-strip-types scripts/verify-core-boundaries.mjs",
+    "test:intent": "node --experimental-strip-types scripts/verify-intent-reliability.mjs",
+    "test:intent:api": "node scripts/verify-intent-api.mjs",
     "test:profile": "npm run test:browser:reset && node scripts/verify-file-profile.mjs ../evaluation/fixtures/excel_multi_sheet_sample.xlsx",
     "test:quality": "npm run test:browser:reset && node scripts/verify-quality-checks.mjs",
     "test:quality-impact": "node --experimental-strip-types scripts/verify-quality-impact.mjs",
@@ -45,7 +47,7 @@
     "test:alerting": "node scripts/verify-alert-policy.mjs",
     "test:browser:reset": "node scripts/reset-browser-workspace.mjs",
     "test:workbench": "npm run test:browser:reset && node scripts/evaluate-workbench.mjs",
-    "test:ci:static": "npm run lint && npm run typecheck && npm run build && npm run test:core && npm run test:upload-boundaries && npm run test:quality-impact && npm run test:analysis && npm run test:agent:foundation && npm run test:catalog && npm run test:join && npm run test:agent:runtime && npm run test:evidence && npm run test:providers && npm run test:alerting",
+    "test:ci:static": "npm run lint && npm run typecheck && npm run build && npm run test:core && npm run test:intent && npm run test:upload-boundaries && npm run test:quality-impact && npm run test:analysis && npm run test:agent:foundation && npm run test:catalog && npm run test:join && npm run test:agent:runtime && npm run test:evidence && npm run test:providers && npm run test:alerting",
     "test:ci:browser": "npm run test:scenarios && npm run test:agent && npm run test:profile && npm run test:quality && npm run test:cleaning && npm run test:metric && npm run test:execution && npm run test:execution:mobile && npm run test:workbench && npm run test:release:browser && npm run test:recovery && npm run test:persistence && npm run test:anonymous-isolation && npm run test:d1:recovery",
     "test:release": "npm run lint && npm run typecheck && npm run build && npm run test:core && npm run test:profile && npm run test:quality && npm run test:quality-impact && npm run test:cleaning && npm run test:metric && npm run test:execution && npm run test:analysis && npm run test:agent:foundation && npm run test:catalog && npm run test:join && npm run test:agent:runtime && npm run test:evidence && npm run test:scenarios && npm run test:providers && npm run test:workbench",
     "test:release:browser": "npm run test:analysis:e2e && npm run test:guide:e2e && npm run test:join:e2e && npm run test:join:reconciliation && npm run test:join:three-table && npm run test:novice-files",
