@@ -42,9 +42,22 @@ async function evaluate(expression) {
 await command("Runtime.enable");
 await command("Page.reload", { ignoreCache: true });
 await new Promise((resolve) => setTimeout(resolve, 1500));
+await evaluate(`(async () => {
+  const removal = document.querySelector('.remove-file-button');
+  if (removal) removal.click();
+  const deadline = Date.now() + 10000;
+  while (document.querySelector('.profile-card') || document.querySelector('.query-box button')?.disabled) {
+    if (Date.now() > deadline) throw new Error('Timed out preparing a fresh authenticated or anonymous workspace');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+})()`);
 const fileInput = await command("Runtime.evaluate", { expression: 'document.querySelector(\'input[type="file"]\')', returnByValue: false });
 if (!fileInput.result?.objectId) throw new Error("Upload input not found");
 await command("DOM.setFileInputFiles", { objectId: fileInput.result.objectId, files: [fixture] });
+await command("Runtime.callFunctionOn", {
+  objectId: fileInput.result.objectId,
+  functionDeclaration: "function(){ this.dispatchEvent(new Event('change', { bubbles: true })); }",
+});
 
 const result = await evaluate(`(async () => {
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -56,7 +69,10 @@ const result = await evaluate(`(async () => {
     }
   };
   const deadline = Date.now() + 15000;
-  while (!document.querySelector('.profile-card')) {
+  while (!document.querySelector('.profile-card')
+    || !document.querySelector('.dataset-status')?.textContent.includes('orders_quality_sample.csv')
+    || document.querySelector('.upload-button input')?.disabled
+    || document.querySelector('.query-box textarea')?.value !== '') {
     if (Date.now() > deadline) throw new Error('Timed out waiting for profile');
     await sleep(100);
   }
