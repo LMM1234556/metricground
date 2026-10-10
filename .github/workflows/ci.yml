@@ -72,7 +72,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npm run start > /tmp/metricground-dev.log 2>&1 &
+          npm run start -- --var METRICGROUND_ANONYMOUS_SESSIONS:true --var METRICGROUND_REQUIRE_AUTH:false > /tmp/metricground-dev.log 2>&1 &
           echo $! > /tmp/metricground-dev.pid
 
           for attempt in {1..60}; do
@@ -120,7 +120,7 @@ jobs:
         run: npm run test:release:browser
 
       - name: Run persistence and recovery checks
-        run: npm run test:recovery && npm run test:persistence && npm run test:anonymous-isolation && npm run test:d1:recovery
+        run: npm run test:recovery && npm run test:persistence && npm run test:anonymous-isolation -- --require-anonymous && npm run test:d1:recovery
 
       - name: Upload diagnostic logs on failure
         if: failure()
