@@ -34,7 +34,23 @@ async function sha256(value: string) {
 
 async function cancelUnreadBody(request: Request) {
   if (request.body && !request.body.locked) {
-    try { await request.body.cancel(); } catch { /* The caller may already have disconnected. */ }
+    const reader = request.body.getReader();
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<never>((_, reject) => {
+      timeout = setTimeout(() => reject(new Error("Rejected request body drain timed out")), 500);
+    });
+    let bytes = 0;
+    try {
+      while (bytes <= 64 * 1024) {
+        const chunk = await Promise.race([reader.read(), deadline]);
+        if (chunk.done) return;
+        bytes += chunk.value.byteLength;
+      }
+    } catch { /* A rejected request may already have disconnected. */ }
+    finally {
+      clearTimeout(timeout);
+      void reader.cancel().catch(() => undefined);
+    }
   }
 }
 

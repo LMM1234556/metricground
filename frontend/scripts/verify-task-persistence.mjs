@@ -43,7 +43,7 @@ async function requestJson(url, init = {}, maximumAttempts = 3) {
     let response;
     let raw;
     try {
-      response = await fetch(url, init);
+      response = await fetch(url, { ...init, signal: AbortSignal.timeout(15000) });
       raw = await response.text();
     } catch (error) {
       latest = { raw: error instanceof Error ? error.message : String(error) };
@@ -156,6 +156,8 @@ assert.equal(rateLimitedResponse.status, 429);
 assert.ok(rateLimitedResponse.headers.get("X-Request-Id"));
 assert.equal(rateLimitedResponse.headers.get("X-RateLimit-Remaining"), "0");
 assert.ok(rateLimitedResponse.headers.get("Retry-After"));
+const afterRejection = await requestJson(`${baseUrl}/api/session`, {}, 1);
+assert.equal(afterRejection.status, 200, "会话接口必须在拒绝/限流压力检查后继续响应");
 
 console.log(JSON.stringify({
   checksPassed: true,
@@ -171,4 +173,5 @@ console.log(JSON.stringify({
   oversizedTaskStatus: oversized.status,
   oversizedPlanStatus: oversizedPlan.status,
   rateLimitStatus: rateLimitedResponse.status,
+  sessionAfterRejectionStatus: afterRejection.status,
 }, null, 2));
