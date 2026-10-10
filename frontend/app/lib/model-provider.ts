@@ -24,7 +24,8 @@ export function getAgentProviderCandidates(environment: ProviderEnvironment): Ag
     apiKey: environment.OLLAMA_API_KEY ?? "ollama-local",
     sendsRawRows: false,
   }];
-  if (!enabled(environment.AGENT_CLOUD_FALLBACK)) return providers;
+  const cloudOnly = environment.AGENT_PROVIDER_MODE === "cloud-only";
+  if (!enabled(environment.AGENT_CLOUD_FALLBACK)) return cloudOnly ? [] : providers;
   if (environment.GROQ_API_KEY && environment.GROQ_MODEL) {
     providers.push({
       id: "groq",
@@ -47,5 +48,5 @@ export function getAgentProviderCandidates(environment: ProviderEnvironment): Ag
       sendsRawRows: false,
     });
   }
-  return providers;
+  return cloudOnly ? providers.filter((provider) => provider.kind === "cloud") : providers;
 }

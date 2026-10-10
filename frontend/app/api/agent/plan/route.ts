@@ -1,5 +1,4 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { hasToolCall, isStepCount, ToolLoopAgent, tool } from "ai";
 import { z } from "zod";
 import {
   AGENT_TOOLS, AgentPlan, DatasetAgentContext, isDistinctCountQuestion,
@@ -7,6 +6,9 @@ import {
 } from "../../../lib/agent-plan";
 import { enforcePolicyGuards } from "../../../lib/agent-plan-policy";
 import { getAgentProviderCandidates } from "../../../lib/model-provider";
+import { createBudgetedModelFetch, ModelCostPolicyError } from "../../../lib/model-cost-policy";
+import { createModelBudgetStore } from "../../../lib/model-budget.server";
+import { createIntentPlanningAgent, decisionInputSchema } from "../../../lib/intent-planning-agent";
 import { apiJson, guardApiRequest, readJsonBody } from "../../../lib/api-guard.server";
 
 const contextSchema = z.object({
@@ -25,14 +27,6 @@ const contextSchema = z.object({
     title: z.string().max(300), severity: z.string().max(10), check: z.string().max(30),
   })).max(200),
   availableTools: z.array(z.enum(AGENT_TOOLS)).max(AGENT_TOOLS.length),
-});
-
-const decisionInputSchema = z.object({
-  analysisType: z.enum(["profile", "quality", "cleaning", "metric", "group_compare", "trend", "top_n", "unsupported"]),
-  entityField: z.string().max(160).optional().default(""),
-  valueField: z.string().max(160).optional().default(""),
-  groupField: z.string().max(160).optional().default(""),
-  timeField: z.string().max(160).optional().default(""),
 });
 
 function firstMatchingField(context: DatasetAgentContext, pattern: RegExp) {
@@ -290,44 +284,19 @@ export async function POST(request: Request) {
   let submittedPlan: AgentPlan | null = null;
   const providerErrors: string[] = [];
   for (const provider of getAgentProviderCandidates(process.env)) {
-    const compatible = createOpenAICompatible({ name: provider.id, baseURL: provider.baseURL, apiKey: provider.apiKey });
     try {
-    const agent = new ToolLoopAgent({
-      model: compatible.chatModel(provider.model),
-      instructions: `/no_think
-你是 MetricGround 的意图识别 Agent。必须先调用 inspectDataset，再调用 submitAnalysisPlan，不要输出普通文本。
-analysisType 只能选择：profile 数据画像、quality 数据质量、cleaning 数据清洗、metric 单指标、group_compare 分组比较、trend 时间趋势、top_n 排名、unsupported 其他需求。
-四类字段只能使用 inspectDataset 返回的真实字段名；没有对应字段时使用空字符串。执行权限、澄清和风险由系统规则处理。`,
-      tools: {
-        inspectDataset: tool({
-          description: "读取当前上传文件的结构化画像和质量摘要，不读取原始明细值。",
-          inputSchema: z.object({}),
-          execute: async () => dataset,
-        }),
-        submitAnalysisPlan: tool({
-          description: "提交紧凑的分析决策，由确定性策略编译为安全执行计划。",
-          inputSchema: decisionInputSchema,
-          execute: async (input) => {
-            const candidate = planFromDecision(input, question, dataset);
-            submittedPlan = validatePlanFields(enforcePolicyGuards(candidate, question), dataset);
-            return { accepted: true, action: submittedPlan.action };
-          },
-        }),
-      },
-      prepareStep: ({ stepNumber }) => stepNumber === 0
-        ? { activeTools: ["inspectDataset"], toolChoice: { type: "tool", toolName: "inspectDataset" } }
-        : {
-          activeTools: ["submitAnalysisPlan"],
-          toolChoice: { type: "tool", toolName: "submitAnalysisPlan" },
-          instructions: `/no_think
-你已经读取数据画像。针对用户问题“${question}”，现在必须调用 submitAnalysisPlan，不要输出普通文本。
-请选择一个 analysisType，并从画像中绑定 entityField、valueField、groupField、timeField；没有对应字段时使用空字符串。`,
-        },
-      stopWhen: [hasToolCall("submitAnalysisPlan"), isStepCount(3)],
-      temperature: 0,
+    const isCloud = provider.kind === "cloud";
+    const compatible = createOpenAICompatible({
+      name: provider.id, baseURL: provider.baseURL, apiKey: provider.apiKey,
+      ...(isCloud ? { fetch: createBudgetedModelFetch({ provider, ...createModelBudgetStore(context.requestId, provider) }) } : {}),
+    });
+    const agent = createIntentPlanningAgent(compatible.chatModel(provider.model), dataset, (input) => {
+      const candidate = planFromDecision(input, question, dataset);
+      submittedPlan = validatePlanFields(enforcePolicyGuards(candidate, question), dataset);
+      return { accepted: true, action: submittedPlan.action };
     });
     let lastError: unknown;
-    for (let attempt = 1; attempt <= 2; attempt += 1) {
+    for (let attempt = 1; attempt <= (isCloud ? 1 : 2); attempt += 1) {
       submittedPlan = null;
       try {
         const result = await agent.generate({
@@ -342,6 +311,10 @@ analysisType 只能选择：profile 数据画像、quality 数据质量、cleani
           model: provider.model,
           stepsExecuted: result.steps.length,
           attempts: attempt,
+          usage: {
+            inputTokens: result.totalUsage.inputTokens ?? null,
+            outputTokens: result.totalUsage.outputTokens ?? null,
+          },
           latencyMs: Date.now() - startedAt,
         });
       } catch (error) {
@@ -351,7 +324,7 @@ analysisType 只能选择：profile 数据画像、quality 数据质量、cleani
     }
     throw lastError;
     } catch (error) {
-      providerErrors.push(`${provider.id}: ${error instanceof Error ? error.message : "Unknown agent error"}`);
+      providerErrors.push(`${provider.id}: ${error instanceof ModelCostPolicyError ? error.code : "MODEL_PLAN_FAILED"}`);
     }
   }
   return apiJson(context, {

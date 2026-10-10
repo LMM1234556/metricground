@@ -1,0 +1,56 @@
+import assert from "node:assert/strict";
+import { DatabaseSync } from "node:sqlite";
+import { MODEL_BUDGET_SCHEMA, MODEL_RESERVE_SQL, MODEL_TRIAL_LIMITS, createBudgetedModelFetch } from "../app/lib/model-cost-policy.ts";
+
+const db = new DatabaseSync(":memory:");
+for (const sql of MODEL_BUDGET_SCHEMA) db.exec(sql);
+const reserveSQL = db.prepare(MODEL_RESERVE_SQL);
+const counts = Array.from({ length: 30 }, () => reserveSQL.get(new Date().toISOString(), MODEL_TRIAL_LIMITS.totalRequests));
+assert.equal(counts.filter(Boolean).length, 20);
+assert.equal(db.prepare("SELECT request_count FROM cloud_model_budget").get().request_count, 20);
+assert.equal(reserveSQL.get("2099-01-01", MODEL_TRIAL_LIMITS.totalRequests), undefined, "Changing dates does not reset trial budget");
+
+const provider = { id: "dashscope", kind: "cloud", model: "qwen-plus", baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1", apiKey: "fake", sendsRawRows: false };
+let reservations = 0, network = 0;
+const receipts = [];
+const reserve = async () => String(++reservations);
+const record = async (receipt) => { receipts.push(receipt); };
+const fetchImpl = async (_url, init) => {
+  network++;
+  const payload = JSON.parse(init.body);
+  assert.equal(payload.enable_thinking, false);
+  assert.equal(payload.max_tokens, 512);
+  assert.equal(init.redirect, "error");
+  return Response.json({ usage: { prompt_tokens: 100, completion_tokens: 25 } });
+};
+const url = provider.baseURL + "/chat/completions";
+const request = { method: "POST", body: JSON.stringify({ model: "qwen-plus", messages: [], max_tokens: 9999, enable_thinking: true }) };
+const bounded = createBudgetedModelFetch({ provider, reserve, record, fetchImpl });
+await bounded(url, request);
+await bounded(url, request);
+await assert.rejects(() => bounded(url, request), /MODEL_QUESTION_LIMIT/);
+assert.equal(network, 2);
+assert.equal(reservations, 2);
+assert.equal(receipts[0].inputTokens, 100);
+assert.equal(receipts[0].outputTokens, 25);
+
+const fresh = () => createBudgetedModelFetch({ provider, reserve, record, fetchImpl });
+await assert.rejects(() => fresh()(url, { ...request, body: JSON.stringify({ model: "qwen-plus", messages: [{ content: "x".repeat(25000) }] }) }), /MODEL_INPUT_LIMIT/);
+await assert.rejects(() => fresh()(url, { ...request, body: JSON.stringify({ model: "qwen-max" }) }), /MODEL_BODY_INVALID/);
+await assert.rejects(() => fresh()("https://example.com/chat/completions", request), /MODEL_ENDPOINT_NOT_APPROVED/);
+await assert.rejects(() => fresh()(url, { ...request, body: JSON.stringify({ model: "qwen-plus", stream: true }) }), /MODEL_BODY_INVALID/);
+assert.equal(network, 2, "Rejected payloads make no provider requests");
+const unavailable = createBudgetedModelFetch({ provider, reserve: async () => { throw new Error("MODEL_BUDGET_UNAVAILABLE"); }, record, fetchImpl });
+await assert.rejects(() => unavailable(url, request), /MODEL_BUDGET_UNAVAILABLE/);
+assert.equal(network, 2, "Database failure blocks outgoing network requests");
+const failed = createBudgetedModelFetch({ provider, reserve, record, fetchImpl: async () => { network++; throw new Error("Sensitive provider diagnostic"); } });
+await assert.rejects(() => failed(url, request), /MODEL_REQUEST_FAILED/);
+assert.equal(reservations, 3, "Failed requests still consume reservations");
+assert.equal(network, 3, "No automatic retry inside fetch guard");
+assert.equal(receipts.at(-1).status, "failed");
+assert.ok(!JSON.stringify(receipts).includes("Sensitive"));
+const denied = createBudgetedModelFetch({ provider: { ...provider, id: "groq" }, reserve, record, fetchImpl });
+await assert.rejects(() => denied(url, request), /CLOUD_MODEL_NOT_APPROVED/);
+assert.equal(network, 3);
+db.close();
+console.log(JSON.stringify({ passed: true, globalReservations: 20, outboundBoundaryChecks: 12, automaticRetries: 0, scope: "Synthetic SQL/fetch checks; not cloud accuracy or a currency budget guarantee" }));

@@ -24,5 +24,7 @@ assert.deepEqual(cloud.map((provider) => provider.id), ["ollama", "groq", "dashs
 assert(cloud.slice(1).every((provider) => provider.kind === "cloud" && provider.sendsRawRows === false));
 assert.equal(cloud[1].baseURL, "https://api.groq.com/openai/v1");
 assert.equal(cloud[2].baseURL, "https://dashscope.aliyuncs.com/compatible-mode/v1");
+assert.deepEqual(getAgentProviderCandidates({ AGENT_PROVIDER_MODE: "cloud-only", AGENT_CLOUD_FALLBACK: "false" }), []);
+assert.deepEqual(getAgentProviderCandidates({ AGENT_PROVIDER_MODE: "cloud-only", AGENT_CLOUD_FALLBACK: "true", DASHSCOPE_API_KEY: "fake", DASHSCOPE_MODEL: "qwen-plus" }).map((provider) => provider.id), ["dashscope"]);
 
 console.log(JSON.stringify({ checks: 10, defaultOrder: cloud.map((provider) => provider.id), localDefault: localOnly[0].model, cloudRequiresOptIn: true, rawRowsSent: false }, null, 2));
