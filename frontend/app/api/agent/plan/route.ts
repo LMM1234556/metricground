@@ -39,13 +39,18 @@ function firstMatchingField(context: DatasetAgentContext, pattern: RegExp) {
   return context.fields.find((field) => pattern.test(field.name))?.name ?? null;
 }
 
+function mentionsField(question: string, name: string) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^A-Za-z0-9_])${escaped}($|[^A-Za-z0-9_])`, "i").test(question);
+}
+
 function preferredEntityField(question: string, context: DatasetAgentContext) {
   if (isDistinctCountQuestion(question)) {
-    const named = context.fields.find((field) => question.includes(field.name));
+    const named = context.fields.find((field) => mentionsField(question, field.name));
     if (named) return named.name;
     const identifier = question.match(/\b[A-Za-z_][\w.]*(?:_id|_key|_code)\b/i)?.[0];
     if (identifier) {
-      const matches = context.fields.filter((field) => field.name === identifier || field.name.endsWith(`.${identifier}`));
+      const matches = context.fields.filter((field) => field.name.toLowerCase() === identifier.toLowerCase() || field.name.toLowerCase().endsWith(`.${identifier.toLowerCase()}`));
       return matches.length === 1 ? matches[0].name : null;
     }
   }
@@ -64,11 +69,37 @@ function preferredEntityField(question: string, context: DatasetAgentContext) {
     ?? firstMatchingField(context, /(?:^|_)(?:order|customer|user|sku|item)_?id|订单|客户|用户|商品.*编号/i);
 }
 
+function preferredValueField(question: string, context: DatasetAgentContext) {
+  const numeric = context.fields.filter((field) => ["数值", "混合"].includes(field.type));
+  const named = numeric.find((field) => mentionsField(question, field.name));
+  if (named) return named.name;
+  const requested = question.match(/(?:计算|汇总|求和|平均)\s*([A-Za-z_][\w.]*)/i)?.[1]
+    ?? question.match(/([A-Za-z_][\w.]*)\s*(?:合计|总额|求和|平均)/i)?.[1];
+  if (requested && !/^(?:gmv|revenue|sales)$/i.test(requested)) {
+    const matches = numeric.filter((field) => field.name === requested || field.name.endsWith(`.${requested}`));
+    return matches.length === 1 ? matches[0].name : null;
+  }
+  return numeric.find((field) => /amount|sales|gmv|revenue|spend|price|stock_qty|金额|销售额|收入|价格|库存/i.test(field.name))?.name ?? null;
+}
+
+function preferredGroupField(question: string, context: DatasetAgentContext) {
+  const requested = /地区|区域/i.test(question) ? /region|state|province|地区|区域/i
+    : /渠道/i.test(question) ? /channel|渠道/i
+    : /品类|类别|类目/i.test(question) ? /category|品类|类别|类目/i
+    : /仓库/i.test(question) ? /warehouse|仓库/i
+    : /客户类型|客户分群/i.test(question) ? /segment|customer_type|客户类型|客户分群/i
+    : null;
+  if (requested) return context.fields.find((field) => requested.test(field.name))?.name ?? null;
+  const named = question.match(/按\s*([A-Za-z_][\w.]*)\s*(?:分组|汇总|比较)/i)?.[1];
+  if (named) return context.fields.find((field) => field.name === named || field.name.endsWith(`.${named}`))?.name ?? null;
+  return firstMatchingField(context, /region|segment|category|warehouse|channel|地区|区域|品类|客户类型|仓库|渠道/i);
+}
+
 function fallbackPlan(question: string, context: DatasetAgentContext): AgentPlan {
   const intent = inferStrongAnalysisType(question);
   const entity = preferredEntityField(question, context);
-  const value = firstMatchingField(context, /amount|sales|gmv|revenue|spend|price|stock_qty|金额|销售额|收入|价格|库存/i);
-  const group = firstMatchingField(context, /region|segment|category|warehouse|channel|地区|区域|品类|客户类型|仓库|渠道/i);
+  const value = preferredValueField(question, context);
+  const group = preferredGroupField(question, context);
   const time = context.fields.find((field) => field.type === "日期")?.name
     ?? firstMatchingField(context, /date|time|month|日期|时间|月份/i);
   const base = {
@@ -195,15 +226,21 @@ function planFromDecision(input: z.infer<typeof decisionInputSchema>, question: 
     unsupported: "预测模型",
   };
   const base = fallbackPlan(analysisType === "metric" || isJoinAmountRiskQuestion(question) || isRowCountDifferenceQuestion(question) ? question : intentPrompt[analysisType], context);
+  const requestedValue = preferredValueField(question, context);
+  const requestedGroup = preferredGroupField(question, context);
   const candidateBindings = {
     entityField: isCountMetric ? preferredEntityField(question, context) : input.entityField.trim() || base.fieldBindings.entityField,
-    valueField: isCountMetric ? null : input.valueField.trim() || base.fieldBindings.valueField,
-    groupField: input.groupField.trim() || base.fieldBindings.groupField,
+    valueField: isCountMetric ? null : input.valueField.trim() || requestedValue,
+    groupField: input.groupField.trim() || requestedGroup,
     timeField: isCountMetric ? null : input.timeField.trim() || base.fieldBindings.timeField,
   };
   const fieldBindings = keepRelevantFieldBindings(analysisType, candidateBindings);
   return {
     ...base,
+    ...(analysisType === "top_n" || analysisType === "group_compare" ? {
+      action: !fieldBindings.groupField || (!fieldBindings.valueField && !fieldBindings.entityField) ? "clarify" as const : base.action,
+      clarification: !fieldBindings.groupField ? "请选择当前数据中真实存在的分组字段；未匹配的维度不会被其他字段替代。" : base.clarification,
+    } : {}),
     analysisType,
     summary: isCountMetric ? "已识别为去重计数指标，需要确认统计对象和筛选范围。" : base.summary,
     fieldBindings,

@@ -91,7 +91,7 @@ const absentIdentifier = await plan("统计 missing_id 的去重数量");
 assert.equal(absentIdentifier.action, "clarify");
 assert.equal(absentIdentifier.fieldBindings.entityField, null);
 const rowDifference = await plan("为什么表的行数比订单数多？", {
-  ...dataset, fields: dataset.fields.map((field) => field.name === "order_id" ? { ...field, uniqueCount: 2 } : field),
+  ...dataset, fields: dataset.fields.map((field) => field.name === "order_id" ? { ...field, uniqueCount: 2, candidateKey: false } : field),
 });
 assert.equal(rowDifference.analysisType, "quality");
 assert.match(rowDifference.summary, /3 行/);
@@ -100,5 +100,16 @@ assert.match(rowDifference.clarification, /订单明细/);
 assert.ok(!rowDifference.tools.includes("execute_metric"));
 const noDifference = await plan("为什么表的行数比订单数多？");
 assert.match(noDifference.summary, /未发现/);
+const missingCost = await plan("计算 cost 合计");
+assert.equal(missingCost.action, "clarify");
+assert.equal(missingCost.fieldBindings.valueField, null, "缺失的 cost 不能用现有 amount 替代");
+const costContext = { ...dataset, columnCount: 4, fields: [...dataset.fields,
+  { name: "cost", type: "数值", missingRate: 0, uniqueCount: 3, candidateKey: false }] };
+const cost = await plan("计算 cost 合计", costContext);
+assert.equal(cost.fieldBindings.valueField, "cost");
+const missingChannel = await plan("哪个渠道的订单金额最多？");
+assert.equal(missingChannel.analysisType, "top_n");
+assert.equal(missingChannel.action, "clarify");
+assert.equal(missingChannel.fieldBindings.groupField, null, "缺少渠道字段时不能使用地区替代");
 
-console.log(JSON.stringify({ passed: true, cases: 11, source: "policy-router", scope: "实际 API 路由与字段绑定回归，不代表模型准确率" }, null, 2));
+console.log(JSON.stringify({ passed: true, cases: 14, source: "policy-router", scope: "实际 API 路由与字段绑定回归，不代表模型准确率" }, null, 2));
