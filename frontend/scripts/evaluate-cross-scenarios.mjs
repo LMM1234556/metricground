@@ -5,13 +5,17 @@ import { createDatasetCatalog, profileRelationship } from "../app/lib/dataset-ca
 import { createJoinSpec, executeControlledJoin } from "../app/lib/controlled-join.ts";
 import { profileRows } from "../app/lib/tabular-profile.ts";
 
+const sessionResponse = await fetch("http://localhost:5173/api/session");
+assert.equal(sessionResponse.status, 200);
+const sessionCookie = sessionResponse.headers.get("Set-Cookie")?.split(";")[0] ?? "";
+
 function profile(fileName, rows) {
   return profileRows(rows, { fileName, fileSize: JSON.stringify(rows).length, fileType: "CSV", sheetNames: ["CSV 数据"], activeSheet: "CSV 数据" });
 }
 async function plan(question, dataset) {
   const response = await fetch("http://localhost:5173/api/agent/plan", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(sessionCookie ? { Cookie: sessionCookie } : {}) },
     body: JSON.stringify({ question, dataset: createDatasetAgentContext(dataset) }),
   });
   if (!response.ok) throw new Error(`Agent API ${response.status}: ${await response.text()}`);

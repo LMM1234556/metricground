@@ -1,10 +1,16 @@
 import { ensureTaskRunSchema, taskRunDb } from "./task-run-persistence.server";
+import {
+  anonymousSessionRequired,
+  anonymousSessionsEnabled,
+  readAnonymousSessionToken,
+} from "./anonymous-session.server";
 
 export type ApiContext = {
   requestId: string;
   route: string;
   ownerHash: string;
   authenticated: boolean;
+  anonymous: boolean;
   traceRef: string | null;
   startedAt: number;
   rateLimit: { limit: number; remaining: number; resetAt: number };
@@ -60,12 +66,21 @@ export async function guardApiRequest(request: Request, options: GuardOptions) {
   const traceId = request.headers.get("X-Trace-Id")?.trim() ?? "";
   const userId = request.headers.get("oai-authenticated-user-id")?.trim() ?? "";
   const authenticated = Boolean(userId);
-  const ownerHash = await sha256(`metricground-owner:${userId || "anonymous-local"}`);
+  const anonymousToken = readAnonymousSessionToken(request);
+  const anonymousMode = anonymousSessionsEnabled();
+  const anonymous = !authenticated && Boolean(anonymousToken);
+  const ownerSubject = authenticated
+    ? userId
+    : anonymousToken
+      ? `anonymous:${anonymousToken}`
+      : "anonymous-local";
+  const ownerHash = await sha256(`metricground-owner:${ownerSubject}`);
   const provisional: ApiContext = {
     requestId,
     route: options.route,
     ownerHash,
     authenticated,
+    anonymous,
     traceRef: traceId ? traceId.slice(-12) : null,
     startedAt,
     rateLimit: { limit: options.limit, remaining: options.limit, resetAt: startedAt + (options.windowMs ?? 60_000) },
@@ -73,6 +88,14 @@ export async function guardApiRequest(request: Request, options: GuardOptions) {
 
   if (process.env.METRICGROUND_REQUIRE_AUTH === "true" && !authenticated) {
     return { response: apiJson(provisional, { error: "此部署要求登录后访问。" }, { status: 401 }) } as const;
+  }
+  if (anonymousMode && anonymousSessionRequired(request, authenticated)) {
+    return {
+      response: apiJson(provisional, {
+        error: "匿名测试会话尚未初始化，请刷新页面后重试。",
+        code: "ANONYMOUS_SESSION_REQUIRED",
+      }, { status: 401 }),
+    } as const;
   }
   if (options.mutation) {
     const origin = request.headers.get("Origin");

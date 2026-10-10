@@ -1,6 +1,6 @@
 {
   "name": "metricground",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
@@ -37,6 +37,7 @@
     "test:guide:e2e": "npm run test:browser:reset && node scripts/verify-novice-guide.mjs",
     "test:novice-files": "npm run test:browser:reset && node scripts/verify-novice-test-files.mjs",
     "test:persistence": "node scripts/verify-task-persistence.mjs",
+    "test:anonymous-isolation": "node scripts/verify-anonymous-session-isolation.mjs",
     "test:hosted:isolation": "node scripts/verify-hosted-owner-isolation.mjs",
     "test:upload-boundaries": "node --experimental-strip-types scripts/verify-upload-boundaries.mjs",
     "test:recovery": "node scripts/verify-workspace-recovery.mjs",
@@ -45,7 +46,7 @@
     "test:browser:reset": "node scripts/reset-browser-workspace.mjs",
     "test:workbench": "npm run test:browser:reset && node scripts/evaluate-workbench.mjs",
     "test:ci:static": "npm run lint && npm run typecheck && npm run build && npm run test:core && npm run test:upload-boundaries && npm run test:quality-impact && npm run test:analysis && npm run test:agent:foundation && npm run test:catalog && npm run test:join && npm run test:agent:runtime && npm run test:evidence && npm run test:providers && npm run test:alerting",
-    "test:ci:browser": "npm run test:scenarios && npm run test:agent && npm run test:profile && npm run test:quality && npm run test:cleaning && npm run test:metric && npm run test:execution && npm run test:execution:mobile && npm run test:workbench && npm run test:release:browser && npm run test:recovery && npm run test:persistence && npm run test:d1:recovery",
+    "test:ci:browser": "npm run test:scenarios && npm run test:agent && npm run test:profile && npm run test:quality && npm run test:cleaning && npm run test:metric && npm run test:execution && npm run test:execution:mobile && npm run test:workbench && npm run test:release:browser && npm run test:recovery && npm run test:persistence && npm run test:anonymous-isolation && npm run test:d1:recovery",
     "test:release": "npm run lint && npm run typecheck && npm run build && npm run test:core && npm run test:profile && npm run test:quality && npm run test:quality-impact && npm run test:cleaning && npm run test:metric && npm run test:execution && npm run test:analysis && npm run test:agent:foundation && npm run test:catalog && npm run test:join && npm run test:agent:runtime && npm run test:evidence && npm run test:scenarios && npm run test:providers && npm run test:workbench",
     "test:release:browser": "npm run test:analysis:e2e && npm run test:guide:e2e && npm run test:join:e2e && npm run test:join:reconciliation && npm run test:join:three-table && npm run test:novice-files",
     "db:generate": "drizzle-kit generate"

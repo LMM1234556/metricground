@@ -108,6 +108,9 @@ button { cursor:pointer; }
 .auth-required-banner svg { flex:0 0 auto; margin-top:1px; }
 .auth-required-banner a { flex:0 0 auto; padding:7px 9px; border-radius:7px; color:#fff; background:#2563eb; font-weight:700; text-decoration:none; }
 .auth-required-banner a:hover { background:#1d4ed8; }
+.anonymous-test-banner { display:flex; align-items:flex-start; gap:7px; margin:0 0 14px; padding:11px 13px; border:1px solid #a7ddd2; border-radius:10px; color:#315c54; background:#f2faf8; font-size:10px; line-height:1.55; }
+.anonymous-test-banner svg { flex:0 0 auto; margin-top:1px; color:#0f766e; }
+.anonymous-test-banner strong { margin-right:5px; color:#0f766e; }
 .eyebrow { margin:0 0 4px; color:#2563eb; font-size:11px; font-weight:750; letter-spacing:.12em; text-transform:uppercase; }
 .page-heading h1,.evidence-heading h2 { margin:0; color:#172033; letter-spacing:-.035em; }
 .page-heading h1 { font-size:clamp(22px,2vw,27px); font-weight:720; }

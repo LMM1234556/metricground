@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
 
 const baseUrl = process.env.METRICGROUND_BASE_URL ?? "http://127.0.0.1:5173";
+let defaultCookie = "";
 const suffix = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
 const now = new Date().toISOString();
 const run = {
@@ -34,6 +35,9 @@ async function put(body, key, extraHeaders = {}) {
 }
 
 async function requestJson(url, init = {}, maximumAttempts = 3) {
+  const headers = new Headers(init.headers);
+  if (defaultCookie && !headers.has("Cookie")) headers.set("Cookie", defaultCookie);
+  init = { ...init, headers };
   let latest;
   for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
     let response;
@@ -72,6 +76,9 @@ assert.equal(health.status, "ok");
 assert.equal(health.version, packageJson.version);
 assert.equal(health.checks.d1.status, "ok");
 assert.ok(["ok", "unavailable"].includes(health.checks.model.status));
+const session = await requestJson(`${baseUrl}/api/session`);
+assert.equal(session.status, 200);
+defaultCookie = session.headers.get("Set-Cookie")?.split(";")[0] ?? "";
 
 const created = await put(run, `create_${suffix}`);
 assert.equal(created.status, 201);

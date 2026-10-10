@@ -2,6 +2,31 @@ import assert from "node:assert/strict";
 import { inferStrongAnalysisType, isDistinctCountQuestion, resolveAgentAnalysisType } from "../app/lib/agent-plan.ts";
 import { profileRows } from "../app/lib/tabular-profile.ts";
 import { createExecutionConfig, executeMetricContract } from "../app/lib/metric-execution.ts";
+import {
+  ANONYMOUS_SESSION_COOKIE,
+  anonymousSessionRequired,
+  readAnonymousSessionToken,
+} from "../app/lib/anonymous-session.server.ts";
+import { GET as readSession } from "../app/api/session/route.ts";
+
+process.env.METRICGROUND_ANONYMOUS_SESSIONS = "true";
+process.env.METRICGROUND_REQUIRE_AUTH = "false";
+const anonymousSession = await readSession(new Request("https://metricground.example/api/session"));
+const anonymousSessionBody = await anonymousSession.json();
+const anonymousCookie = anonymousSession.headers.get("Set-Cookie") ?? "";
+assert.equal(anonymousSessionBody.anonymous, true, "匿名测试模式必须初始化独立浏览器会话");
+assert.match(anonymousCookie, new RegExp(`^${ANONYMOUS_SESSION_COOKIE}=`));
+assert.match(anonymousCookie, /HttpOnly/);
+assert.match(anonymousCookie, /SameSite=Lax/);
+assert.match(anonymousCookie, /Secure/);
+assert.ok(readAnonymousSessionToken(new Request("https://metricground.example", {
+  headers: { Cookie: anonymousCookie.split(";")[0] },
+})), "服务端必须能读取自己签发的匿名会话 Cookie");
+assert.equal(anonymousSessionRequired(
+  new Request("https://metricground.example/api/agent/plan", { method: "POST" }), false), true,
+  "匿名测试模式下，缺少浏览器会话的核心 API 必须拒绝执行");
+delete process.env.METRICGROUND_ANONYMOUS_SESSIONS;
+delete process.env.METRICGROUND_REQUIRE_AUTH;
 
 const metadata = {
   fileName: "boundary.csv",
@@ -119,5 +144,7 @@ console.log(JSON.stringify({
     missingContractFieldsBlocked: true,
     deterministicIntentGuards: intentCases.length,
     ambiguousIntentDelegated: true,
+    anonymousSessionIssuedSecurely: true,
+    missingAnonymousSessionRejected: true,
   },
 }, null, 2));

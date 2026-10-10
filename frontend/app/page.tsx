@@ -77,7 +77,7 @@ type AnalysisMode = "overview" | "trend" | "combined" | "category" | "delivery" 
 type ProfileView = "画像" | "质量检查" | "清洗方案" | "多表关联" | "指标口径" | "计算执行" | "经营分析";
 type QualityDecision = "approved" | "kept";
 type PersistenceStatus = { status: "idle" | "saving" | "saved" | "conflict" | "error"; message: string };
-type SessionStatus = { authenticated: boolean; required: boolean } | null;
+type SessionStatus = { authenticated: boolean; required: boolean; anonymous?: boolean } | null;
 
 type WorkspaceSnapshot = {
   version: 1;
@@ -289,7 +289,7 @@ export default function Home() {
     void fetch("/api/session", { cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.json() as Promise<{ authenticated: boolean; required: boolean }>;
+        return response.json() as Promise<{ authenticated: boolean; required: boolean; anonymous?: boolean }>;
       })
       .then((status) => { if (!cancelled) setSessionStatus(status); })
       .catch(() => { if (!cancelled) setSessionStatus({ authenticated: false, required: true }); });
@@ -353,7 +353,7 @@ export default function Home() {
 
   useEffect(() => {
     latestTaskRunRef.current = taskRun;
-    if (!workspaceHydratedRef.current || !taskRun) return;
+    if (!workspaceHydratedRef.current || !taskRun || !sessionStatus || (sessionStatus.required && !sessionStatus.authenticated)) return;
     const timer = window.setTimeout(() => {
       persistenceQueueRef.current = persistenceQueueRef.current.then(async () => {
         const candidate = latestTaskRunRef.current;
@@ -396,7 +396,7 @@ export default function Home() {
       });
     }, 500);
     return () => window.clearTimeout(timer);
-  }, [taskRun]);
+  }, [taskRun, sessionStatus]);
 
   async function loadFile(file: File, sheetName?: string) {
     setIsReadingFile(true);
@@ -610,6 +610,10 @@ export default function Home() {
   }
 
   async function runAnalysis(question: string) {
+    if (!sessionStatus) {
+      setAgentNavigationNotice("正在初始化访问会话，请稍后重试。");
+      return;
+    }
     if (sessionStatus?.required && !sessionStatus.authenticated) {
       setAgentNavigationNotice("当前部署要求先登录，登录后才能提交分析并保存证据。");
       return;
@@ -1122,6 +1126,13 @@ export default function Home() {
             </div>
           )}
 
+          {sessionStatus?.anonymous && (
+            <div className="anonymous-test-banner" role="status">
+              <ShieldCheck size={17} />
+              <span><strong>匿名新人测试</strong> 无需登录；TaskRun 按当前浏览器隔离。测试结束前请下载报告，清除浏览器数据或恢复登录后将无法找回匿名记录。</span>
+            </div>
+          )}
+
           {guidanceMode === "guided" && (
             <NoviceGuide
               step={guideStep}
@@ -1158,7 +1169,7 @@ export default function Home() {
                 ? `请输入业务问题，例如：${guidedTemplates.find((item) => !item.startsWith("检查")) ?? guidedTemplates[0] ?? "统计当前数据的业务对象数量"}`
                 : "请输入想了解的业务问题，例如：2018 年 GMV 是否增长？"}
             />
-            <button className="send-button" type="submit" aria-label="开始分析" disabled={isAnalyzing || Boolean(sessionStatus?.required && !sessionStatus.authenticated)}>
+            <button className="send-button" type="submit" aria-label="开始分析" disabled={isAnalyzing || !sessionStatus || Boolean(sessionStatus.required && !sessionStatus.authenticated)}>
               {isAnalyzing ? <LoaderCircle className="spin" size={18} /> : <Send size={18} />}
             </button>
           </form>

@@ -120,7 +120,7 @@ jobs:
         run: npm run test:release:browser
 
       - name: Run persistence and recovery checks
-        run: npm run test:recovery && npm run test:persistence && npm run test:d1:recovery
+        run: npm run test:recovery && npm run test:persistence && npm run test:anonymous-isolation && npm run test:d1:recovery
 
       - name: Upload diagnostic logs on failure
         if: failure()

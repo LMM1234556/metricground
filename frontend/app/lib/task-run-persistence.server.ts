@@ -109,6 +109,9 @@ export async function persistTaskRun(run: TaskRun, idempotencyKey: string, owner
   const now = new Date().toISOString();
   const current = await readTaskRun(run.id, run.traceId, ownerHash, db);
   if (!current) {
+    const occupied = await db.prepare("SELECT id FROM task_runs WHERE id = ?")
+      .bind(run.id).first<{ id: string }>();
+    if (occupied) return { kind: "conflict", current: null };
     if (run.persistenceRevision !== 0) return { kind: "conflict", current: null };
     const stored = { ...run, persistenceRevision: 1 };
     const payload = JSON.stringify(stored);

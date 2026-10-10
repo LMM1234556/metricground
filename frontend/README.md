@@ -18,7 +18,21 @@
 - 外部数据库连接、角色权限、团队空间和多人协作；TaskRun 持久化与条件式所有者隔离已完成本地验收；
 - 通用“聚合量 / 聚合量”比例；
 - 非常规金额字段名的人工对账指定入口；
-- 公开部署和正式目标用户可用性研究。
+- 正式目标用户可用性研究；公开演示部署的当前状态以根目录交付记录为准。
+
+## 临时匿名新人测试
+
+公开测试部署同时设置 `METRICGROUND_REQUIRE_AUTH=false` 与 `METRICGROUND_ANONYMOUS_SESSIONS=true`。页面先调用 `/api/session`，服务端签发 HttpOnly、SameSite=Lax、HTTPS Secure 的随机会话 Cookie；核心 API 缺少合法会话时拒绝请求。TaskRun 按该匿名会话隔离，匿名限流仍按 IP 计算。
+
+匿名 Cookie 有效期为 7 天；同一浏览器配置中的多个标签页共享身份。清除浏览器数据、Cookie 过期或恢复强制登录后，匿名记录不能按账号找回，也不会自动迁移。因此参与者应在结束前下载报告。原有登录账号的 TaskRun 所有者哈希保持兼容。
+
+测试结束后设置 `METRICGROUND_REQUIRE_AUTH=true`、`METRICGROUND_ANONYMOUS_SESSIONS=false` 并重新部署。同一站点保持公开时，访客仍可打开首页，但核心 API 要求登录。不要把两个开关都关闭的本地开发配置部署到公开环境。
+
+验证匿名会话初始化、刷新稳定性、双向读取隔离及跨会话写入拒绝：
+
+```powershell
+npm run test:anonymous-isolation -- --require-anonymous
+```
 
 ## 本地运行
 
