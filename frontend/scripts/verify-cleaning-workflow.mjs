@@ -48,6 +48,13 @@ await command("DOM.setFileInputFiles", { objectId: fileInput.result.objectId, fi
 
 const result = await evaluate(`(async () => {
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const waitFor = async (predicate, label) => {
+    const deadline = Date.now() + 15000;
+    while (!predicate()) {
+      if (Date.now() > deadline) throw new Error('Timed out waiting for ' + label);
+      await sleep(50);
+    }
+  };
   const deadline = Date.now() + 15000;
   while (!document.querySelector('.profile-card')) {
     if (Date.now() > deadline) throw new Error('Timed out waiting for profile');
@@ -66,7 +73,9 @@ const result = await evaluate(`(async () => {
   };
 
   clickByText('.profile-tabs button', '清洗方案');
-  await sleep(60);
+  await waitFor(() => document.querySelectorAll('.cleaning-option input').length > 0
+    && [...document.querySelectorAll('.cleaning-submit-row button')].some((item) => item.textContent.includes('二次确认')),
+    'cleaning rules and confirmation control');
   const optionCount = document.querySelectorAll('.cleaning-option input').length;
   [...document.querySelectorAll('.cleaning-option input')].forEach((checkbox) => {
     if (!checkbox.checked) checkbox.click();
