@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import https from "node:https";
 
-const baseUrl = process.env.METRICGROUND_BASE_URL ?? "http://127.0.0.1:5173";
+const baseUrl = process.env.METRICGROUND_BASE_URL ?? "http://localhost:5173";
 const suffix = `${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
 const requireAnonymousMode = process.argv.includes("--require-anonymous");
 console.log(JSON.stringify({ event: "anonymous_probe_started", origin: new URL(baseUrl).origin, requireAnonymousMode }));

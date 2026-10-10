@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 
 const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
 
-const baseUrl = process.env.METRICGROUND_BASE_URL ?? "http://127.0.0.1:5173";
+const baseUrl = process.env.METRICGROUND_BASE_URL ?? "http://localhost:5173";
 let defaultCookie = "";
 const suffix = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
 const now = new Date().toISOString();

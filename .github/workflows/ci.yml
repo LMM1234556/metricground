@@ -130,11 +130,8 @@ jobs:
       - name: Run anonymous isolation checks
         timeout-minutes: 2
         run: |
-          ps -eo pid,ppid,stat,args | rg 'wrangler|workerd' || true
-          curl --silent --show-error --max-time 5 http://127.0.0.1:5173/api/health || true
-          curl --silent --show-error --max-time 5 http://localhost:5173/api/session || true
-          curl --silent --show-error --max-time 5 -H 'Cookie: metricground_anon_session=00000000-0000-4000-8000-000000000001' http://127.0.0.1:5173/api/session || true
-          curl --fail --silent --show-error --max-time 5 http://127.0.0.1:5173/api/session
+          curl --fail --silent --show-error --max-time 15 http://localhost:5173/api/health
+          curl --fail --silent --show-error --max-time 15 http://localhost:5173/api/session
           npm run test:anonymous-isolation -- --require-anonymous
 
       - name: Run D1 recovery checks
