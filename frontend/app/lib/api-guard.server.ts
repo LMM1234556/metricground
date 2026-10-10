@@ -32,6 +32,12 @@ async function sha256(value: string) {
   return [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+async function cancelUnreadBody(request: Request) {
+  if (request.body && !request.body.locked) {
+    try { await request.body.cancel(); } catch { /* The caller may already have disconnected. */ }
+  }
+}
+
 function securityHeaders(context: ApiContext) {
   return {
     "Cache-Control": "private, no-store",
@@ -87,9 +93,11 @@ export async function guardApiRequest(request: Request, options: GuardOptions) {
   };
 
   if (process.env.METRICGROUND_REQUIRE_AUTH === "true" && !authenticated) {
+    await cancelUnreadBody(request);
     return { response: apiJson(provisional, { error: "此部署要求登录后访问。" }, { status: 401 }) } as const;
   }
   if (anonymousMode && anonymousSessionRequired(request, authenticated)) {
+    await cancelUnreadBody(request);
     return {
       response: apiJson(provisional, {
         error: "匿名测试会话尚未初始化，请刷新页面后重试。",
@@ -101,6 +109,7 @@ export async function guardApiRequest(request: Request, options: GuardOptions) {
     const origin = request.headers.get("Origin");
     const fetchSite = request.headers.get("Sec-Fetch-Site")?.toLowerCase();
     if ((origin && origin !== new URL(request.url).origin) || fetchSite === "cross-site") {
+      await cancelUnreadBody(request);
       return { response: apiJson(provisional, { error: "跨站写入请求已被拒绝。" }, { status: 403 }) } as const;
     }
   }
@@ -126,6 +135,7 @@ export async function guardApiRequest(request: Request, options: GuardOptions) {
       .bind(bucketKey, resetAt, new Date(startedAt).toISOString())
       .first<{ request_count: number }>();
   } catch (error) {
+    await cancelUnreadBody(request);
     console.error(JSON.stringify({
       level: "error",
       event: "rate_limit_store_failed",
@@ -143,6 +153,7 @@ export async function guardApiRequest(request: Request, options: GuardOptions) {
     rateLimit: { limit: options.limit, remaining: Math.max(0, options.limit - count), resetAt },
   };
   if (count > options.limit) {
+    await cancelUnreadBody(request);
     return {
       response: apiJson(context, { error: "请求过于频繁，请稍后重试。" }, {
         status: 429,
@@ -156,6 +167,7 @@ export async function guardApiRequest(request: Request, options: GuardOptions) {
 export async function readJsonBody(request: Request, maximumBytes: number) {
   const declared = Number(request.headers.get("Content-Length"));
   if (Number.isFinite(declared) && declared > maximumBytes) {
+    await cancelUnreadBody(request);
     return { error: `请求载荷不能超过 ${maximumBytes} 字节。`, status: 413 } as const;
   }
   const reader = request.body?.getReader();
