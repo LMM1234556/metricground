@@ -1,4 +1,5 @@
 import type { AnalysisSpec, DatasetVersion } from "./analysis-spec";
+import type { PlanningEvidence, QualityEvidence, ResultEvidence } from "./task-evidence";
 
 export type TaskRunState =
   | "IDLE"
@@ -69,6 +70,10 @@ export type TaskRun = {
   resultSummary: string | null;
   failure: TaskRunFailure | null;
   events: TaskRunEvent[];
+  // Optional for compatibility with tasks created before evidence capture existed.
+  planningEvidence?: PlanningEvidence;
+  qualityEvidence?: QualityEvidence;
+  resultEvidence?: ResultEvidence;
 };
 
 const TRANSITIONS: Record<TaskRunState, readonly TaskRunState[]> = {

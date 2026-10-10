@@ -2,6 +2,7 @@ import type { AgentPlanResponse, AgentToolName } from "./agent-plan";
 import type { AnalysisSpec } from "./analysis-spec";
 import { createDatasetVersion, validateAnalysisSpec } from "./analysis-spec.ts";
 import type { DatasetProfile } from "./tabular-profile";
+import { capturePlanningEvidence, captureQualityEvidence, type ResultEvidence } from "./task-evidence.ts";
 import {
   attachAnalysisSpec,
   completeValidation,
@@ -35,10 +36,15 @@ export function createTaskRunFromPlan(
   profile: DatasetProfile,
   question: string,
   response: AgentPlanResponse,
-  options: { id?: string; now?: string } = {},
+  options: { id?: string; now?: string; qualityDecisions?: Record<string, "approved" | "kept"> } = {},
 ) {
   const version = createDatasetVersion(profile);
   let run = createTaskRun({ id: options.id, question, datasetVersions: [version], now: options.now });
+  run = {
+    ...run,
+    planningEvidence: capturePlanningEvidence(response, run.createdAt),
+    qualityEvidence: captureQualityEvidence(profile, options.qualityDecisions, run.createdAt),
+  };
   run = transitionTaskRun(run, "PLANNING", "Agent 开始根据问题和数据画像制定计划", options.now);
   run = setTaskPlan(run, response.plan.steps, null, options.now);
   if (response.plan.tools.includes("profile_dataset")) {
@@ -108,11 +114,13 @@ export function completeTaskTool(
     validationSummary: string;
     resultSummary: string;
     validationEvidence?: Record<string, unknown>;
+    resultEvidence?: ResultEvidence;
     now?: string;
   },
 ) {
   if (run.state !== "EXECUTING") throw new Error(`当前任务不在执行状态：${run.state}`);
   let next = succeedToolCall(run, input.callId, input.outputSummary, input.now);
+  if (input.resultEvidence) next = { ...next, resultEvidence: input.resultEvidence };
   next = transitionTaskRun(next, "VALIDATING", "工具执行完成，开始基础校验与 DuckDB 独立复核", input.now);
   const validation = startToolCall(next, "validate_result", {
     taskRunId: next.id,

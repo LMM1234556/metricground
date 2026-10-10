@@ -226,9 +226,11 @@ export async function verifyMetricWithDuckDB(
   const startedAt = performance.now();
   const version = createDatasetVersion(profile);
   let query = "";
+  let queryParameters: Array<string | number> = [];
   try {
     const base = filterCondition(config.baseFilter);
     const numeratorCondition = filterCondition(config.ratioNumerator);
+    queryParameters = [...base.parameters, ...(contract.metricType === "ratio" ? numeratorCondition.parameters : [])];
     const entity = `NULLIF(TRIM(CAST(${quoteIdentifier(contract.statisticalUnit)} AS VARCHAR)), '')`;
     const numeric = contract.valueField
       ? `CASE WHEN REGEXP_FULL_MATCH(TRIM(CAST(${quoteIdentifier(contract.valueField)} AS VARCHAR)), '${NUMERIC_PATTERN}') THEN TRY_CAST(TRIM(CAST(${quoteIdentifier(contract.valueField)} AS VARCHAR)) AS DOUBLE) END`
@@ -261,7 +263,7 @@ export async function verifyMetricWithDuckDB(
       const executable = query.replaceAll('"__TABLE__"', quoteIdentifier(tableName));
       const statement = await connection.prepare(executable);
       try {
-        const result = await statement.query(...base.parameters, ...(contract.metricType === "ratio" ? numeratorCondition.parameters : []));
+        const result = await statement.query(...queryParameters);
         const row = rowsFromArrow<Record<string, unknown>>(result)[0];
         return {
           source_rows: numberValue(row.source_rows) ?? 0,
@@ -285,6 +287,7 @@ export async function verifyMetricWithDuckDB(
       datasetVersionId: version.versionId,
       durationMs: Math.round(performance.now() - startedAt),
       query,
+      queryParameters,
       checks,
       referenceValue: reference.metric_value,
       referenceRows: [],
@@ -298,6 +301,7 @@ export async function verifyMetricWithDuckDB(
       datasetVersionId: version.versionId,
       durationMs: Math.round(performance.now() - startedAt),
       query,
+      queryParameters,
       checks: [],
       referenceValue: null,
       referenceRows: [],
@@ -430,6 +434,7 @@ export async function verifyBusinessAnalysisWithDuckDB(
       datasetVersionId: version.versionId,
       durationMs: Math.round(performance.now() - startedAt),
       query,
+      queryParameters: [],
       checks,
       referenceValue: null,
       referenceRows: reference.rows.map((row) => ({ key: row.key, value: row.value })),
@@ -443,6 +448,7 @@ export async function verifyBusinessAnalysisWithDuckDB(
       datasetVersionId: version.versionId,
       durationMs: Math.round(performance.now() - startedAt),
       query,
+      queryParameters: [],
       checks: [],
       referenceValue: null,
       referenceRows: [],

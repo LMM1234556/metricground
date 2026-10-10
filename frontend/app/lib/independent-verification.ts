@@ -11,6 +11,7 @@ export type IndependentVerification = {
   datasetVersionId: string;
   durationMs: number;
   query: string;
+  queryParameters?: Array<string | number>;
   checks: IndependentVerificationCheck[];
   referenceValue: number | null;
   referenceRows: Array<{ key: string; value: number }>;

@@ -28,6 +28,7 @@ import { createDatasetAgentContext, type AgentPlan, type AgentPlanResponse } fro
 import { analysisSpecFromBusinessConfig, analysisSpecFromMetricContract } from "./lib/analysis-spec";
 import { approveTaskRun, completeTaskTool, createTaskRunFromPlan, failTaskTool, recordEvidenceExport, startTaskTool } from "./lib/agent-runtime";
 import type { TaskRun } from "./lib/task-run";
+import { bindQualityEvidence } from "./lib/task-evidence";
 import { businessFieldLabel, fieldDisplayName, rawFieldName } from "./lib/field-label";
 import { assessQualityImpact, type QualityImpactSummary } from "./lib/quality-impact";
 import { clearWorkspaceSession, loadWorkspaceSession, saveWorkspaceSession } from "./lib/workspace-session";
@@ -571,6 +572,9 @@ export default function Home() {
 
   function recordQualityDecision(issueId: string, decision: QualityDecision) {
     setQualityDecisions((current) => ({ ...current, [issueId]: decision }));
+    if (datasetProfile && taskRun && taskRun.state !== "COMPLETED") {
+      setTaskRun(bindQualityEvidence(taskRun, datasetProfile, { ...qualityDecisions, [issueId]: decision }));
+    }
     setMetricContract(null);
     setExecutionQualityImpact(null);
     invalidateCompletedAnalysis("质量判断已变化，旧计算证据已失效；请完成质量判断后重新确认指标口径。");
@@ -601,7 +605,7 @@ export default function Home() {
     if (datasetProfile && metricContract && !agentResponse) {
       const response = buildManualMetricAgentResponse(metricContract);
       setAgentResponse(response);
-      setTaskRun(createTaskRunFromPlan(datasetProfile, metricContract.metricName, response));
+      setTaskRun(createTaskRunFromPlan(datasetProfile, metricContract.metricName, response, { qualityDecisions }));
       if (!submittedQuery) setSubmittedQuery(metricContract.metricName);
     }
     setProfileView("计算执行");
@@ -634,7 +638,7 @@ export default function Home() {
         if (!response.ok) throw new Error("Agent planning failed");
         const planned = await response.json() as AgentPlanResponse;
         setAgentResponse(planned);
-        setTaskRun(createTaskRunFromPlan(datasetProfile, normalized, planned));
+        setTaskRun(createTaskRunFromPlan(datasetProfile, normalized, planned, { qualityDecisions }));
       } catch {
         const fallback: AgentPlanResponse = {
           plan: {
@@ -646,7 +650,7 @@ export default function Home() {
           source: "rule-fallback", model: null, stepsExecuted: 0, latencyMs: 0,
         };
         setAgentResponse(fallback);
-        setTaskRun(createTaskRunFromPlan(datasetProfile, normalized, fallback));
+        setTaskRun(createTaskRunFromPlan(datasetProfile, normalized, fallback, { qualityDecisions }));
       } finally {
         setIsAnalyzing(false);
       }
@@ -726,7 +730,7 @@ export default function Home() {
     const response = agentResponse ?? responseOverride;
     if (!datasetProfile || !response) return null;
     if (taskRun && ["NEEDS_CLARIFICATION", "NEEDS_APPROVAL", "READY_TO_EXECUTE"].includes(taskRun.state)) return taskRun;
-    return createTaskRunFromPlan(datasetProfile, submittedQuery || metricContract?.metricName || "受控指标计算", response);
+    return createTaskRunFromPlan(datasetProfile, submittedQuery || metricContract?.metricName || "受控指标计算", response, { qualityDecisions });
   }
 
   function handleBusinessExecution(event: BusinessAnalysisLifecycleEvent) {
@@ -734,6 +738,7 @@ export default function Home() {
     try {
       let next = freshInteractiveRun();
       if (!next) return;
+      next = bindQualityEvidence(next, datasetProfile, qualityDecisions);
       const spec = analysisSpecFromBusinessConfig(event.config, datasetProfile, submittedQuery);
       if (next.state !== "READY_TO_EXECUTE") {
         next = approveTaskRun(next, {
@@ -759,6 +764,12 @@ export default function Home() {
         outputSummary: `生成 ${event.result.rows.length} 个分析结果`,
         validationSummary: validation,
         resultSummary: summary,
+        resultEvidence: {
+          engine: event.result.engine, sourceRows: event.result.sourceRows, eligibleRows: event.result.eligibleRows,
+          excludedGroupingRows: event.result.excludedGroupingRows, excludedMissingEntities: event.result.excludedMissingEntities,
+          excludedInvalidValues: event.result.excludedInvalidValues, fullGroupCount: event.result.fullGroupCount,
+          groups: event.result.rows.slice(0, 100), groupsTruncated: event.result.rows.length > 100,
+        },
         validationEvidence: independent ? {
           engine: independent.engine,
           engineVersion: independent.engineVersion,
@@ -767,6 +778,10 @@ export default function Home() {
           durationMs: independent.durationMs,
           checks: independent.checks,
           sql: independent.query,
+          parameters: independent.queryParameters,
+          referenceValue: independent.referenceValue,
+          aggregateResults: independent.referenceRows.slice(0, 100),
+          aggregatesTruncated: independent.referenceRows.length > 100,
         } : undefined,
       }));
     } catch (error) {
@@ -781,6 +796,7 @@ export default function Home() {
       if (!agentResponse) setAgentResponse(response);
       let next = freshInteractiveRun(response);
       if (!next) return;
+      next = bindQualityEvidence(next, datasetProfile, qualityDecisions);
       const base = analysisSpecFromMetricContract(
         event.contract,
         datasetProfile,
@@ -813,6 +829,12 @@ export default function Home() {
         outputSummary: `${event.contract.metricName}=${event.result.displayValue}`,
         validationSummary: validation,
         resultSummary: `${event.contract.metricName}：${event.result.displayValue}`,
+        resultEvidence: {
+          engine: event.result.engine, sourceRows: event.result.sourceRows, eligibleRows: event.result.eligibleRows,
+          distinctEntities: event.result.distinctEntities, excludedMissingEntities: event.result.excludedMissingEntities,
+          excludedInvalidValues: event.result.excludedInvalidValues, value: event.result.value,
+          numerator: event.result.numerator, denominator: event.result.denominator,
+        },
         validationEvidence: independent ? {
           engine: independent.engine,
           engineVersion: independent.engineVersion,
@@ -821,6 +843,8 @@ export default function Home() {
           durationMs: independent.durationMs,
           checks: independent.checks,
           sql: independent.query,
+          parameters: independent.queryParameters,
+          referenceValue: independent.referenceValue,
         } : undefined,
       }));
       setExecutionQualityImpact(event.result.qualityImpact);

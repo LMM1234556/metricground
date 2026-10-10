@@ -48,7 +48,7 @@ export default function AgentPlanCard({ response, loading, completed = false, re
         <div className="agent-source"><ShieldCheck size={14} />{response.source === "ollama-agent" ? `本地 ${response.model} · ${response.stepsExecuted} 步` : response.source === "cloud-agent" ? `${response.provider ?? "云模型"} / ${response.model} · ${response.stepsExecuted} 步` : response.source === "policy-router" ? "确定性策略路由" : "规则安全降级"}</div>
       </div>
 
-      {plan.action === "clarify" && <div className="agent-clarification"><CircleHelp size={17} /><div><strong>执行前需要你确认</strong><p>{plan.clarification}</p></div></div>}
+      {plan.action === "clarify" && !completed && <div className="agent-clarification"><CircleHelp size={17} /><div><strong>执行前需要你确认</strong><p>{plan.clarification}</p></div></div>}
       {plan.action === "unsupported" && <div className="agent-unsupported"><AlertCircle size={17} /><div><strong>已识别需求，但当前工具不足</strong><p>{plan.clarification ?? plan.summary}</p></div></div>}
       {completed && (
         <div className="agent-plan-completion" role="status">

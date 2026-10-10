@@ -125,6 +125,7 @@ export type AgentPlanResponse = {
   provider?: "ollama" | "groq" | "dashscope" | null;
   stepsExecuted: number;
   attempts?: number;
+  usage?: { inputTokens: number | null; outputTokens: number | null };
   latencyMs: number;
   fallbackReason?: string;
 };

@@ -4,6 +4,7 @@ import { completeTaskTool, createTaskRunFromPlan, recordEvidenceExport, startTas
 import { approveTaskRun } from "../app/lib/agent-runtime.ts";
 import { analysisSpecFromBusinessConfig } from "../app/lib/analysis-spec.ts";
 import { profileRows } from "../app/lib/tabular-profile.ts";
+import { bindQualityEvidence, captureQualityEvidence } from "../app/lib/task-evidence.ts";
 
 const profile = profileRows([["order_id", "amount", "region"], ["O-1", 100, "华东"], ["O-2", 80, "华南"]], {
   fileName: "orders.csv", fileSize: 50, fileType: "CSV", sheetNames: ["CSV 数据"], activeSheet: "CSV 数据",
@@ -18,7 +19,19 @@ let run = createTaskRunFromPlan(profile, "比较地区金额", { plan, source: "
 const spec = analysisSpecFromBusinessConfig({ analysisType: "group_compare", aggregation: "sum", entityField: "order_id", valueField: "amount", groupField: "region", timeField: "", timeGrain: "month", limit: 5, sortDirection: "desc" }, profile, "比较地区金额");
 run = approveTaskRun(run, { type: "metric", statement: "确认一行一订单，金额使用 amount", spec, now: "2026-09-20T00:00:01.000Z" });
 const started = startTaskTool(run, "execute_group_compare", { analysisSpecId: spec.id, records: profile.records }, { callId: "evidence-call", now: "2026-09-20T00:00:02.000Z" });
-run = completeTaskTool(started.run, { callId: started.callId, outputSummary: "2 个地区", validationSummary: "结果有限且行数勾稽通过", resultSummary: "华东 100，华南 80", now: "2026-09-20T00:00:03.000Z" });
+const fullSql = `WITH base AS (SELECT * FROM "__TABLE__")\n${"-- verification detail\n".repeat(60)}SELECT SUM("amount") FROM base;`;
+const parameters = ["long-parameter-".repeat(60)];
+run = completeTaskTool(started.run, {
+  callId: started.callId, outputSummary: "2 个地区", validationSummary: "结果有限且行数勾稽通过", resultSummary: "华东 100，华南 80",
+  validationEvidence: {
+    engine: "duckdb-wasm", engineVersion: "1.32.0", status: "passed", datasetVersionId: run.datasetVersions[0].versionId,
+    sql: fullSql, parameters, checks: [{ label: "分组对账", passed: true, detail: "2/2" }],
+    aggregateResults: Array.from({ length: 25 }, (_, index) => ({ key: `group-${index}`, value: index })),
+    apiKey: "SECRET_MUST_NOT_EXPORT", optional: undefined,
+  },
+  resultEvidence: { engine: "browser-deterministic", sourceRows: 2, eligibleRows: 2, excludedMissingEntities: 0, excludedInvalidValues: 0, fullGroupCount: 2, groups: [{ key: "华东", value: 100, sourceRows: 1, distinctEntities: 1, excludedInvalidValues: 0 }], groupsTruncated: false },
+  now: "2026-09-20T00:00:03.000Z",
+});
 run = recordEvidenceExport(run, "2026-09-20T00:00:04.000Z");
 const evidence = buildEvidencePackage(run, "2026-09-20T00:00:05.000Z");
 const json = evidenceAsJson(evidence);
@@ -32,9 +45,57 @@ assert(!json.includes('"O-1"'), "证据包不得包含原始订单行");
 assert(json.includes("export_evidence"));
 assert(markdown.includes("结果有限且行数勾稽通过"));
 assert(markdown.includes("不包含 Excel/CSV 原始数据行"));
+assert.equal(evidence.version, "1.1");
+const verification = evidence.toolCalls.find((call) => call.tool === "validate_result").input;
+assert.equal(verification.sql, fullSql, "复核 SQL 不得截断");
+assert.deepEqual(verification.parameters, parameters, "绑定参数不得截断");
+assert.equal(verification.aggregateResults.length, 25, "聚合对账不应被通用工具数组预览截断");
+assert(!json.includes("SECRET_MUST_NOT_EXPORT"));
+assert.equal(verifyEvidencePackage(JSON.parse(json)), true, "序列化后校验码仍有效，不能包含 undefined");
+assert(markdown.includes(fullSql));
+assert(markdown.includes("primary.amount") && markdown.includes("primary.region"));
+assert(markdown.includes("聚合方式：sum") && markdown.includes("包含当前数据版本的全部记录/状态"));
+assert(markdown.includes("分组对账 — 2/2"));
+assert(markdown.includes("policy-router"));
+assert.equal(evidence.planningEvidence.usage, null, "未记录的用量不能当成 0");
+assert.equal(evidence.resultEvidence.groups[0].value, 100);
+
+const cloudRun = createTaskRunFromPlan(profile, "模拟规划记录", {
+  plan, source: "cloud-agent", provider: "dashscope", model: "qwen-plus", stepsExecuted: 2, attempts: 1, latencyMs: 123,
+  usage: { inputTokens: 100, outputTokens: 50 },
+}, { now: "2026-09-20T00:00:00.000Z" });
+const cloudEvidence = buildEvidencePackage(cloudRun);
+assert.deepEqual(cloudEvidence.planningEvidence.usage, { inputTokens: 100, outputTokens: 50 });
+assert(evidenceAsMarkdown(cloudEvidence).includes("dashscope") && evidenceAsMarkdown(cloudEvidence).includes("qwen-plus"));
+
+const riskyProfile = profileRows([
+  ["order_id", "purchase_date", "amount", "mixed"],
+  ["O-1", "invalid-date", null, "RAW_SAMPLE_PRIVATE"], ["O-1", "2026-01-02", 80, 42],
+], { fileName: "risky.csv", fileSize: 80, fileType: "CSV", sheetNames: ["CSV 数据"], activeSheet: "CSV 数据" });
+const quality = captureQualityEvidence(riskyProfile, { "missing-2": "kept" }, "2026-09-20T00:00:01.000Z");
+assert.equal(quality.issues.find((issue) => issue.id === "missing-2").decision, "kept");
+assert(quality.issues.some((issue) => issue.check === "有效性"));
+assert(!JSON.stringify(quality).includes("RAW_SAMPLE_PRIVATE"), "混合类型证据不得泄露原始样例");
+assert.throws(() => bindQualityEvidence(run, riskyProfile, {}), /数据版本不一致/);
+const riskyRun = createTaskRunFromPlan(riskyProfile, "风险快照", { plan, source: "policy-router", model: null, stepsExecuted: 0, latencyMs: 1 }, { qualityDecisions: { "missing-2": "kept" } });
+const riskyMd = evidenceAsMarkdown(buildEvidencePackage(riskyRun));
+assert(riskyMd.includes("字段“amount”存在缺失值") && riskyMd.includes("暂不处理（未修复）"));
+assert(riskyMd.includes("未判断") && riskyMd.includes("未执行的质量检查"));
+
+const legacyRun = structuredClone(run);
+delete legacyRun.planningEvidence;
+delete legacyRun.qualityEvidence;
+delete legacyRun.resultEvidence;
+const legacyValidation = legacyRun.toolCalls.find((call) => call.tool === "validate_result");
+legacyValidation.input.sql = fullSql.slice(0, 500) + "…[已截断]";
+delete legacyValidation.input.parameters;
+const legacyMd = evidenceAsMarkdown(buildEvidencePackage(legacyRun));
+assert(legacyMd.includes("未记录规划来源") && legacyMd.includes("未记录质量风险明细"));
+assert(legacyMd.includes("历史复核 SQL 已截断"));
+assert.equal(buildEvidencePackage(legacyRun).task.id, run.id, "重新导出不得创建另一任务");
 
 const tampered = structuredClone(evidence);
 tampered.resultSummary = "被篡改";
 assert.equal(verifyEvidencePackage(tampered), false);
 
-console.log(JSON.stringify({ checks: 10, checksum: evidence.integrity.checksum, tools: evidence.toolCalls.map((call) => call.tool), rawRowsIncluded: evidence.privacy.rawRowsIncluded }, null, 2));
+console.log(JSON.stringify({ suite: "evidence-v1.1", fullSqlLength: fullSql.length, checksum: evidence.integrity.checksum, tools: evidence.toolCalls.map((call) => call.tool), rawRowsIncluded: evidence.privacy.rawRowsIncluded }, null, 2));
