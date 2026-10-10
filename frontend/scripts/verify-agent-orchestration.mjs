@@ -99,9 +99,27 @@ const result = await evaluate(`(async () => {
     groupField: document.querySelector('select[aria-label="分组字段"]')?.value ?? '',
   };
   const ambiguous = await ask('帮我看看这份数据');
+  const paraphrase = await ask('帮我算一下有多少笔不同的订单');
+  const ranking = await ask('哪个地区的订单金额最多？');
+  document.querySelector('.agent-plan-footer button')?.click();
+  await sleep(700);
+  const rankingHandoff = {
+    selectedTab: document.querySelector('[role="tab"][aria-selected="true"]')?.textContent.trim() ?? '',
+    analysisType: document.querySelector('.business-analysis-types button.active strong')?.textContent.trim() ?? '',
+    groupField: document.querySelector('select[aria-label="分组字段"]')?.value ?? '',
+  };
+  const missingIdentifier = await ask('统计 missing_id 的去重数量');
+  document.querySelector('.agent-plan-footer button')?.click();
+  await sleep(700);
+  const missingHandoff = { entityField: document.querySelector('select[name="entityField"]')?.value ?? 'not-found' };
+  const forecast = await ask('预测下个月的销售额');
+  const joinRisk = await ask('关联后订单金额多了一倍，怎么办？');
+  document.querySelector('.agent-plan-footer button')?.click();
+  await sleep(700);
+  const joinHandoff = { selectedTab: document.querySelector('[role="tab"][aria-selected="true"]')?.textContent.trim() ?? '' };
   document.querySelector('.agent-plan-card')?.scrollIntoView({ block: 'center' });
   await sleep(60);
-  return { quality, qualityNavigation, distinctCount, customerCount, customerMetricHandoff, amount, group, groupHandoff, ambiguous, olistAnswerVisible: Boolean(document.querySelector('.answer-card')), evidence: document.querySelector('.agent-evidence-content')?.textContent.replace(/\\s+/g, ' ').trim() ?? '' };
+  return { quality, qualityNavigation, distinctCount, customerCount, customerMetricHandoff, amount, group, groupHandoff, ambiguous, paraphrase, ranking, rankingHandoff, missingIdentifier, missingHandoff, forecast, joinRisk, joinHandoff, olistAnswerVisible: Boolean(document.querySelector('.answer-card')), evidence: document.querySelector('.agent-evidence-content')?.textContent.replace(/\\s+/g, ' ').trim() ?? '' };
 })()`);
 
 const checks = {
@@ -115,6 +133,11 @@ const checks = {
   groupPlanUsesDeterministicTool: !result.group.className.includes("unsupported") && result.group.tools.includes("分组比较") && result.group.tools.includes("结果验证"),
   groupPlanNavigatesAndBindsFields: result.groupHandoff.selectedTab.includes("经营分析") && result.groupHandoff.analysisType.includes("分组比较") && result.groupHandoff.entityField === "order_id" && result.groupHandoff.valueField === "amount" && result.groupHandoff.groupField === "region",
   ambiguousRequestDoesNotInventMetric: !result.ambiguous.tools.includes("确定性计算") && (result.ambiguous.source.includes("qwen3:8b") || result.ambiguous.text.includes("明确本次分析目标")),
+  paraphraseKeepsCountIntent: result.paraphrase.className.includes("ready") && result.paraphrase.text.includes("去重计数指标"),
+  rankingClarificationKeepsRankingPage: result.ranking.className.includes("clarify") && result.rankingHandoff.selectedTab.includes("经营分析") && result.rankingHandoff.analysisType.includes("Top N") && result.rankingHandoff.groupField === "region",
+  missingIdentifierIsNotSilentlyReplaced: result.missingIdentifier.className.includes("clarify") && result.missingHandoff.entityField === "",
+  unsupportedForecastIsNotAmountCalculation: result.forecast.className.includes("unsupported") && !result.forecast.tools.includes("确定性计算") && result.forecast.text.includes("不执行预测"),
+  joinRiskOpensRelationshipWorkbench: result.joinRisk.className.includes("clarify") && result.joinHandoff.selectedTab.includes("多表关联") && result.joinRisk.text.includes("不足以确认根因"),
   uploadedDataDoesNotShowOlistAnswer: result.olistAnswerVisible === false,
   evidenceUsesUploadedDataset: result.evidence.includes("orders_quality_sample.csv") && result.evidence.includes("11 行"),
   rawRowsNotSentNoticeVisible: result.group.text.includes("不向模型发送原始数据行"),
