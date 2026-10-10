@@ -14,7 +14,7 @@
 - `evaluation/novice_usability_participant_brief.md`；
 - 执行任务 5 时再提供 `evaluation/fixtures/join_orders_sample.csv` 和 `evaluation/fixtures/join_customers_sample.csv`。
 
-站点页面可以公开打开，但 Agent 核心流程仍必须使用受邀账号，或让参与者在主持人的已登录设备上依次测试。不要共享登录密码；若使用主持人设备，应在观察表 notes 中记录，测试结论只覆盖产品主流程，不覆盖独立登录体验。
+当前 v0.3.2 公开环境临时开启匿名新人测试，参与者使用自己的浏览器直接打开站点，不需要注册或登录。TaskRun 按浏览器 Cookie 隔离，同一浏览器配置的多个标签页共享身份；不要让不同参与者共用同一浏览器配置。要求参与者在结束前下载报告，清除 Cookie、7 天过期或恢复强制登录后不能按账号找回匿名记录。本轮不测试登录体验。
 
 ## 主持要求
 

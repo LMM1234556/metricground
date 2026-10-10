@@ -2,7 +2,7 @@
 
 MetricGround 面向使用 Excel/CSV 完成常见经营分析的初级数据分析师，提供数据理解、质量检查、指标口径确认、受控计算和结果验证。通用上传数据支持本地 Agent 规划、人工确认、确定性执行、TaskRun 状态追踪与证据导出；Olist 只作为内置演示数据，不再替代用户上传文件的分析结果。
 
-> **交付状态（2026-10-10）**：`v0.3.1` 已修复移动端慢网首次启动 DuckDB-WASM 超时；同源压缩资源、60 秒初始化边界和移动 4G 浏览器回归已落地。代码已发布到 [GitHub](https://github.com/LMM1234556/metricground)，并部署到 [公开可打开的 Sites 演示环境](https://metricground.chirpyseed1.chatgpt.site)。当前为“公开入口、受保护核心”：匿名用户可打开页面和健康接口，Agent 核心 API 仍要求登录。项目所有者和外部受邀身份均已在真实设备完成核心链路；双账号线上探针进一步验证双方可读取自己的 TaskRun（200），读取对方 TaskRun 均被隐藏（404），D1 所有者哈希不同。每小时托管状态与 Worker 错误告警已启用，但尚不是生产 SLA；正式目标用户测试仍未完成。
+> **交付状态（2026-10-10）**：`v0.3.2` 已部署到 [公开新人测试环境](https://metricground.chirpyseed1.chatgpt.site)，Sites 版本 6。当前临时开启免登录测试：每个浏览器使用独立匿名会话，未登录规划 API 返回 200；两个会话自读 TaskRun 为 200，交叉读取为 404，跨会话覆盖为 409。原有账号记录归属保持兼容；测试结束后可恢复强制登录。显式匿名模式的完整 CI 已通过，包含限流后的首次接口可用性检查。历史移动端 DuckDB-WASM 冷启动修复及双账号验证保留。匿名上线证据见 [v0.3.2 验证记录](evaluation/anonymous-access-validation-v0.3.2-2026-10-10.md)。每小时最小告警已启用；正式目标用户测试仍未完成，不能据此宣称生产 SLA 或新人可用性通过。
 
 ![MetricGround 核心经营指标界面](docs/images/overview.png)
 
@@ -41,6 +41,7 @@ MetricGround 面向使用 Excel/CSV 完成常见经营分析的初级数据分�
 - TaskRun 以 `traceId`、幂等键和乐观修订号持久化到 D1；上传数据和完整工作区仅存当前浏览器 IndexedDB，刷新后可恢复且服务端不接收原始数据行；
 - API 使用 D1 固定窗口限流、同源写入检查、请求体上限、结构化请求日志和请求 ID；CSV/XLSX 增加文件大小、类型、空字节、10 万行和 200 列边界；
 - 可选开启 Sites 注入身份的 TaskRun 所有者隔离；开启 `METRICGROUND_REQUIRE_AUTH=true` 后，未登录用户无法提交受保护 API，界面会显示登录入口；
+- 临时公开测试使用 `METRICGROUND_REQUIRE_AUTH=false` 和 `METRICGROUND_ANONYMOUS_SESSIONS=true`，通过 HttpOnly 匿名 Cookie 隔离 TaskRun；缺少会话时核心 API 拒绝执行，匿名限流仍按 IP 计算；
 - 提供本地 D1 导出、SHA-256 清单和隔离目录恢复演练，恢复后逐表核对 TaskRun、幂等写入与所有者绑定数量；
 - 已实现最多 3 张表、单键或双字段复合键、`left/inner join` 的受控关联核心；识别 `1:1`、`1:N`、`N:1`，默认阻止 `N:N`；
 - 已开放交互式多文件关联页，可上传关联表、查看键覆盖率/孤儿键/行数膨胀预估，确认关系与结果粒度后再执行，并将派生数据版本继续交给后续画像、口径和计算；三表场景按两步向导逐条锁定关系与审批记录；
@@ -181,11 +182,11 @@ scripts/              Olist 数据复算和基线启动脚本
 - `npm run test:ci:browser`：在生产构建的本地预览和 Chromium 调试端口上运行 API 场景、文件、质量、计算、关联和新人引导回归。
 - `npm run test:execution:mobile`：在移动端视口、冷缓存和模拟 4G 网络下复跑受控计算与 DuckDB 独立复核。
 
-版本变化见 [CHANGELOG](CHANGELOG.md)，当前基线见 [v0.3.1 版本说明](docs/releases/v0.3.1.md)，移动端外部身份证据见 [v0.3.1 线上验证](evaluation/mobile-external-validation-v0.3.1-2026-10-09.md)，双账号隔离证据见 [线上身份隔离验证](evaluation/hosted-identity-isolation-2026-10-09.md)，远程流水线证据见 [GitHub CI 验证](evaluation/remote-ci-validation-2026-10-09.md)，部署基线见 [Sites 部署验证](evaluation/private-deployment-validation-2026-10-09.md)，生产化边界和验收标准见 [生产化与迭代路线](docs/production_roadmap.md)。
+版本变化见 [CHANGELOG](CHANGELOG.md)，当前基线见 [v0.3.2 版本说明](docs/releases/v0.3.2.md) 和 [匿名上线验证](evaluation/anonymous-access-validation-v0.3.2-2026-10-10.md)，历史移动端外部身份证据见 [v0.3.1 线上验证](evaluation/mobile-external-validation-v0.3.1-2026-10-09.md)，双账号隔离证据见 [线上身份隔离验证](evaluation/hosted-identity-isolation-2026-10-09.md)，生产化边界和验收标准见 [生产化与迭代路线](docs/production_roadmap.md)。
 
 ## 项目边界与后续计划
 
-当前版本仍是 MVP，不是生产级企业数据平台。页面已支持字段画像、质量检查、清洗派生副本、口径合同、计数/求和/平均/条件比例、分组、趋势、Top N、TaskRun、证据导出，以及最多三张表的受控关联。TaskRun 已持久化，刷新可恢复；Sites 外层入口已公开，但 Agent 核心 API 仍启用托管身份强制认证，角色权限和团队空间尚未实现，原始数据也不会跨设备同步。主计算仍在浏览器确定性引擎内完成，DuckDB-WASM 从同一数据版本使用独立 SQL 复算；这能发现计算实现、行数范围和边界不一致，但不能替代业务口径确认，也不是对源数据真实性的外部审计。当前比例不支持任意两个聚合量之比；安全匿名会话、数据库源连接、服务端文件存储、完整 APM/值班体系和正式目标用户测试仍未完成。
+当前版本仍是 MVP，不是生产级企业数据平台。页面已支持字段画像、质量检查、清洗派生副本、口径合同、计数/求和/平均/条件比例、分组、趋势、Top N、TaskRun、证据导出，以及最多三张表的受控关联。TaskRun 已持久化，刷新可恢复；当前公开环境临时使用浏览器匿名会话隔离，Cookie 有效期为 7 天，同一浏览器配置的标签页共享身份。清除 Cookie、过期或恢复强制登录后，匿名记录不能按账号找回或自动迁移；参与者必须在结束前下载报告。角色权限和团队空间尚未实现，原始数据不会跨设备同步。主计算仍在浏览器确定性引擎内完成，DuckDB-WASM 从同一数据版本使用独立 SQL 复算；这能发现计算实现、行数范围和边界不一致，但不能替代业务口径确认，也不是对源数据真实性的外部审计。当前比例不支持任意两个聚合量之比；数据库源连接、服务端文件存储、完整 APM/值班体系和正式目标用户测试仍未完成。
 
 交付入口见 `docs/release_handoff.md`。最小失败告警已经启用，失败、去重、升级与恢复的隔离状态机演练已进入 CI；健康运行按设计保持静默，真实故障发生时再保留通知送达记录，不以此阻塞用户测试。当前下一阶段是邀请 5 名目标用户完成无指导任务测试，之后只根据真实失败点决定是否增加通用比例、非常规金额字段指定和复杂 Excel 支持。当前自动化任务验收见 `evaluation/junior_analyst_task_assessment.md`，现状与边界以 `docs/capability_matrix.md` 为准；旧差距审计仅保留为历史快照。
 

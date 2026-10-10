@@ -64,7 +64,7 @@
 
 已完成：
 
-- 发布 Sites 演示版本，当前部署版本 4 成功，托管源码已与本地 `v0.3.1` 的 176 个受控前端文件对齐；外层访问已改为 `public`，Agent 核心 API 仍要求登录；
+- 发布 Sites 演示版本；当前 v0.3.2 对应 Sites 版本 6，临时开启公开匿名新人测试。每浏览器 Cookie 隔离 TaskRun，缺少会话拒绝执行；未登录规划、自读、交叉读取与跨会话写入边界已线上核实；完整匿名模式 CI 通过，包含拒绝/限流后的首次响应与恢复演练；
 - 托管环境启用 `METRICGROUND_REQUIRE_AUTH=true`；
 - 远程 D1 已创建 `task_runs`、`task_run_writes`、`task_run_owners` 和 `api_rate_limits`；
 - Worker 错误日志可查询，修复默认 favicon 404 后最近错误数为 0；
