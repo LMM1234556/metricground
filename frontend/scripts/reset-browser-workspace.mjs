@@ -21,17 +21,21 @@ function command(method, params = {}) {
   return new Promise((resolve, reject) => pending.set(id, { resolve, reject }));
 }
 await command("Runtime.enable");
-const response = await command("Runtime.evaluate", {
-  expression: `new Promise((resolve) => {
-    const request = indexedDB.deleteDatabase('metricground-workspace');
-    request.onsuccess = () => resolve({ deleted: true });
-    request.onerror = () => resolve({ deleted: false, error: request.error?.message ?? 'unknown' });
-    request.onblocked = () => resolve({ deleted: false, error: 'blocked' });
-  })`,
-  awaitPromise: true,
-  returnByValue: true,
+// Leave the application first: its live IndexedDB connections can block deletion.
+// This helper only targets the dedicated localhost regression browser, not user data.
+const applicationUrl = target.url;
+await command("Page.navigate", { url: "about:blank" });
+let leftApplication = false;
+for (let attempt = 0; attempt < 50; attempt++) {
+  const state = await command("Runtime.evaluate", { expression: "location.href", returnByValue: true });
+  if (state.result.value === "about:blank") { leftApplication = true; break; }
+  await new Promise((resolve) => setTimeout(resolve, 100));
+}
+if (!leftApplication) throw new Error("Workspace reset could not release application connections");
+await command("Storage.clearDataForOrigin", {
+  origin: new URL(applicationUrl).origin,
+  storageTypes: "indexeddb",
 });
-if (!response.result.value?.deleted) throw new Error(`Workspace reset failed: ${response.result.value?.error ?? "unknown"}`);
-await command("Page.reload", { ignoreCache: true });
+await command("Page.navigate", { url: applicationUrl });
 socket.close();
 console.log(JSON.stringify({ reset: true }));
