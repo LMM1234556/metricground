@@ -129,7 +129,9 @@ jobs:
 
       - name: Run anonymous isolation checks
         timeout-minutes: 2
-        run: npm run test:anonymous-isolation -- --require-anonymous
+        run: |
+          curl --fail --silent --show-error --max-time 15 http://127.0.0.1:5173/api/session
+          npm run test:anonymous-isolation -- --require-anonymous
 
       - name: Run D1 recovery checks
         timeout-minutes: 3

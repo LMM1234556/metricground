@@ -1,24 +1,51 @@
 import assert from "node:assert/strict";
+import http from "node:http";
+import https from "node:https";
 
 const baseUrl = process.env.METRICGROUND_BASE_URL ?? "http://127.0.0.1:5173";
 const suffix = `${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
 const requireAnonymousMode = process.argv.includes("--require-anonymous");
 console.log(JSON.stringify({ event: "anonymous_probe_started", origin: new URL(baseUrl).origin, requireAnonymousMode }));
 
+function requestHttp(path, init) {
+  const url = new URL(path, baseUrl);
+  const transport = url.protocol === "https:" ? https : http;
+  const headers = Object.fromEntries(new Headers(init.headers).entries());
+  headers.accept = "application/json";
+  if (init.body != null) headers["content-length"] = String(Buffer.byteLength(init.body));
+  return new Promise((resolve, reject) => {
+    const request = transport.request(url, {
+      method: init.method ?? "GET",
+      headers,
+      signal: AbortSignal.timeout(15000),
+    }, (response) => {
+      const chunks = [];
+      response.on("data", (chunk) => chunks.push(chunk));
+      response.on("error", reject);
+      response.on("end", () => {
+        const responseHeaders = new Headers();
+        for (const [name, value] of Object.entries(response.headers)) {
+          if (Array.isArray(value)) value.forEach((part) => responseHeaders.append(name, part));
+          else if (value != null) responseHeaders.set(name, value);
+        }
+        resolve({ status: response.statusCode, raw: Buffer.concat(chunks).toString("utf8"), headers: responseHeaders });
+      });
+    });
+    request.on("error", reject);
+    request.end(init.body);
+  });
+}
+
 async function requestJson(path, init = {}) {
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     const startedAt = Date.now();
     let response;
     try {
-      response = await fetch(`${baseUrl}${path}`, {
-        ...init,
-        headers: new Headers(init.headers),
-        signal: AbortSignal.timeout(15000),
-      });
+      response = await requestHttp(path, init);
     } catch (error) {
       throw new Error(`Anonymous probe ${init.method ?? "GET"} ${path.split("?")[0]} failed after ${Date.now() - startedAt}ms`, { cause: error });
     }
-    const raw = await response.text();
+    const raw = response.raw;
     if (response.status === 503 && /worker restarted mid-request/i.test(raw) && attempt < 3) {
       await new Promise((resolve) => setTimeout(resolve, attempt * 200));
       continue;
