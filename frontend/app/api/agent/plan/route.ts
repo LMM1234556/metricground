@@ -235,11 +235,16 @@ function planFromDecision(input: z.infer<typeof decisionInputSchema>, question: 
     timeField: isCountMetric ? null : input.timeField.trim() || base.fieldBindings.timeField,
   };
   const fieldBindings = keepRelevantFieldBindings(analysisType, candidateBindings);
+  const needsValue = !isDistinctCountQuestion(question) && /平均|均值|总额|合计|求和|金额|销售额|gmv|收入|营收/i.test(question);
   return {
     ...base,
     ...(analysisType === "top_n" || analysisType === "group_compare" ? {
-      action: !fieldBindings.groupField || (!fieldBindings.valueField && !fieldBindings.entityField) ? "clarify" as const : base.action,
-      clarification: !fieldBindings.groupField ? "请选择当前数据中真实存在的分组字段；未匹配的维度不会被其他字段替代。" : base.clarification,
+      action: !fieldBindings.groupField || (needsValue && !fieldBindings.valueField) || (!fieldBindings.valueField && !fieldBindings.entityField) ? "clarify" as const : base.action,
+      clarification: !fieldBindings.groupField
+        ? "请选择当前数据中真实存在的分组字段；未匹配的维度不会被其他字段替代。"
+        : needsValue && !fieldBindings.valueField
+          ? "请求的数值字段尚未匹配，请选择当前数据中真实存在的字段或补充数据。"
+          : base.clarification,
     } : {}),
     analysisType,
     summary: isCountMetric ? "已识别为去重计数指标，需要确认统计对象和筛选范围。" : base.summary,
