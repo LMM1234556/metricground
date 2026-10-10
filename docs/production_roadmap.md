@@ -64,8 +64,8 @@
 
 已完成：
 
-- 发布 Sites 演示版本；当前 v0.3.2 对应 Sites 版本 6，临时开启公开匿名新人测试。每浏览器 Cookie 隔离 TaskRun，缺少会话拒绝执行；未登录规划、自读、交叉读取与跨会话写入边界已线上核实；完整匿名模式 CI 通过，包含拒绝/限流后的首次响应与恢复演练；
-- 托管环境启用 `METRICGROUND_REQUIRE_AUTH=true`；
+- 发布 Sites 演示版本；当前 v0.3.3 对应 Sites 版本 7，临时开启公开匿名新人测试。每浏览器 Cookie 隔离 TaskRun，缺少会话拒绝执行；完整 CI、线上规则路由和匿名隔离复测通过；公开站点未启用在线大模型；
+- 历史账号隔离验收曾启用 `METRICGROUND_REQUIRE_AUTH=true`；当前匿名测试暂设为 false，并开启匿名会话隔离；
 - 远程 D1 已创建 `task_runs`、`task_run_writes`、`task_run_owners` 和 `api_rate_limits`；
 - Worker 错误日志可查询，修复默认 favicon 404 后最近错误数为 0；
 - 登录后的上传、规划、批准、确定性计算、DuckDB-WASM 复核、证据导出和同浏览器刷新恢复已完成线上烟雾测试；
