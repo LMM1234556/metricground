@@ -3,10 +3,21 @@ import assert from "node:assert/strict";
 const baseUrl = process.env.METRICGROUND_BASE_URL ?? "http://127.0.0.1:5173";
 const suffix = `${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
 const requireAnonymousMode = process.argv.includes("--require-anonymous");
+console.log(JSON.stringify({ event: "anonymous_probe_started", origin: new URL(baseUrl).origin, requireAnonymousMode }));
 
 async function requestJson(path, init = {}) {
   for (let attempt = 1; attempt <= 3; attempt += 1) {
-    const response = await fetch(`${baseUrl}${path}`, init);
+    const startedAt = Date.now();
+    let response;
+    try {
+      response = await fetch(`${baseUrl}${path}`, {
+        ...init,
+        headers: new Headers(init.headers),
+        signal: AbortSignal.timeout(15000),
+      });
+    } catch (error) {
+      throw new Error(`Anonymous probe ${init.method ?? "GET"} ${path.split("?")[0]} failed after ${Date.now() - startedAt}ms`, { cause: error });
+    }
     const raw = await response.text();
     if (response.status === 503 && /worker restarted mid-request/i.test(raw) && attempt < 3) {
       await new Promise((resolve) => setTimeout(resolve, attempt * 200));
@@ -14,6 +25,7 @@ async function requestJson(path, init = {}) {
     }
     let body;
     try { body = JSON.parse(raw); } catch { body = { raw: raw.slice(0, 240) }; }
+    console.log(JSON.stringify({ event: "anonymous_probe_response", method: init.method ?? "GET", path: path.split("?")[0], status: response.status }));
     return { status: response.status, body, headers: response.headers };
   }
   throw new Error("Local preview did not settle after its restart");

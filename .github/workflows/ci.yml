@@ -119,8 +119,21 @@ jobs:
       - name: Run release browser checks
         run: npm run test:release:browser
 
-      - name: Run persistence and recovery checks
-        run: npm run test:recovery && npm run test:persistence && npm run test:anonymous-isolation -- --require-anonymous && npm run test:d1:recovery
+      - name: Run workspace recovery checks
+        timeout-minutes: 2
+        run: npm run test:recovery
+
+      - name: Run API persistence checks
+        timeout-minutes: 2
+        run: npm run test:persistence
+
+      - name: Run anonymous isolation checks
+        timeout-minutes: 2
+        run: npm run test:anonymous-isolation -- --require-anonymous
+
+      - name: Run D1 recovery checks
+        timeout-minutes: 3
+        run: npm run test:d1:recovery
 
       - name: Upload diagnostic logs on failure
         if: failure()
