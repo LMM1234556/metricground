@@ -1,5 +1,6 @@
 import type { AnalysisSpec, DatasetVersion } from "./analysis-spec";
 import type { PlanningEvidence, QualityEvidence, ResultEvidence } from "./task-evidence";
+import type { DataScopeEvidence } from "./analysis-handoff";
 
 export type TaskRunState =
   | "IDLE"
@@ -74,6 +75,7 @@ export type TaskRun = {
   planningEvidence?: PlanningEvidence;
   qualityEvidence?: QualityEvidence;
   resultEvidence?: ResultEvidence;
+  dataScopeEvidence?: DataScopeEvidence;
 };
 
 const TRANSITIONS: Record<TaskRunState, readonly TaskRunState[]> = {

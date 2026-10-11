@@ -1,4 +1,4 @@
-import { CellValue, DatasetProfile, isValidDateValue, profileRecords, QualityIssue } from "./tabular-profile";
+import { type CellValue, type DatasetProfile, isValidDateValue, profileRecords, type QualityIssue } from "./tabular-profile.ts";
 
 export type CleaningAction = {
   issueId: string;

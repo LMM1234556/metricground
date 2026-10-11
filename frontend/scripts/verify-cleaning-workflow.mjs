@@ -113,6 +113,7 @@ const result = await evaluate(`(async () => {
 
   clickByText('.profile-tabs button', '指标口径');
   await sleep(70);
+  document.querySelector('input[aria-label="确认清洗后的分析范围"]').click();
   setText('metricName', '清洗后订单量');
   setText('decisionQuestion', '核对清洗后的订单规模');
   [...document.querySelectorAll('.contract-confirmations input')].forEach((checkbox) => {

@@ -140,7 +140,7 @@ try {
   assert(jsonFile && markdownFile, "Both download paths must produce actual contents");
   const evidence = JSON.parse(jsonFile.content);
   const verification = evidence.toolCalls.find((call) => call.tool === "validate_result").input;
-  assert.equal(evidence.version, "1.3");
+  assert.equal(evidence.version, "1.4");
   assert.equal(verifyEvidencePackage(evidence), true);
   const reportChecksum = markdownFile.content.match(/完整性校验：fnv1a32-pair-v1 \/ ([0-9a-f]{16})/)?.[1];
   assert.equal(reportChecksum, evidence.integrity.checksum, "报告与审计 JSON 必须共享同一证据快照校验和");

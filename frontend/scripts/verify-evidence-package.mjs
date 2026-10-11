@@ -51,7 +51,7 @@ assert.deepEqual(evidenceAfterSecondExport, evidence, "报告和审计 JSON 必�
 assert(markdown.includes("证据快照时间：2026-09-20T00:00:03.000Z"));
 assert(markdown.includes("结果有限且行数勾稽通过"));
 assert(markdown.includes("不包含 Excel/CSV 原始数据行"));
-assert.equal(evidence.version, "1.3");
+assert.equal(evidence.version, "1.4");
 const verification = evidence.toolCalls.find((call) => call.tool === "validate_result").input;
 assert.equal(verification.sql, fullSql, "复核 SQL 不得截断");
 assert.deepEqual(verification.parameters, parameters, "绑定参数不得截断");
@@ -128,4 +128,4 @@ const tampered = structuredClone(evidence);
 tampered.resultSummary = "被篡改";
 assert.equal(verifyEvidencePackage(tampered), false);
 
-console.log(JSON.stringify({ suite: "evidence-v1.3", fullSqlLength: fullSql.length, checksum: evidence.integrity.checksum, tools: evidence.toolCalls.map((call) => call.tool), rawRowsIncluded: evidence.privacy.rawRowsIncluded }, null, 2));
+console.log(JSON.stringify({ suite: "evidence-v1.4", fullSqlLength: fullSql.length, checksum: evidence.integrity.checksum, tools: evidence.toolCalls.map((call) => call.tool), rawRowsIncluded: evidence.privacy.rawRowsIncluded }, null, 2));

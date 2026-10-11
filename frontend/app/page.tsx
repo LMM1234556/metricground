@@ -14,7 +14,7 @@ import snapshot from "./data/olist_snapshot.json";
 import { DatasetProfile, parseTabularFile } from "./lib/tabular-profile";
 import {
   buildMetricContract, contractAsText, createMetricDraft, METRIC_TYPES, validateMetricDraft,
-  MetricContract, MetricDraft,
+  MetricContract, MetricDraft, readableMetricDraft,
 } from "./lib/metric-contract";
 import MetricExecution, { type MetricExecutionLifecycleEvent } from "./components/metric-execution";
 import DataCleaning from "./components/data-cleaning";
@@ -24,7 +24,7 @@ import BusinessAnalysis, { type BusinessAnalysisLifecycleEvent } from "./compone
 import TaskRunTrace, { type EvidenceExportFormat, type EvidenceExportStatus } from "./components/task-run-trace";
 import MultiTableJoin from "./components/multi-table-join";
 import NoviceGuide, { type GuideStep } from "./components/novice-guide";
-import { createDatasetAgentContext, type AgentPlan, type AgentPlanResponse } from "./lib/agent-plan";
+import { createDatasetAgentContext, isDistinctCountQuestion, type AgentPlan, type AgentPlanResponse } from "./lib/agent-plan";
 import { analysisSpecFromBusinessConfig, analysisSpecFromMetricContract } from "./lib/analysis-spec";
 import { approveTaskRun, completeTaskTool, createTaskRunFromPlan, failTaskTool, recordEvidenceExport, startTaskTool } from "./lib/agent-runtime";
 import type { TaskRun } from "./lib/task-run";
@@ -32,6 +32,7 @@ import { bindQualityEvidence } from "./lib/task-evidence";
 import { businessFieldLabel, fieldDisplayName, rawFieldName } from "./lib/field-label";
 import { assessQualityImpact, type QualityImpactSummary } from "./lib/quality-impact";
 import { clearWorkspaceSession, loadWorkspaceSession, saveWorkspaceSession } from "./lib/workspace-session";
+import { analysisConfirmationView, createDataScopeEvidence, rebindMetricDraft, rebindTaskAfterCleaning, type DataScopeEvidence } from "./lib/analysis-handoff";
 
 const trendData = snapshot.monthly.map((row) => ({
   month: row.month.slice(2),
@@ -116,6 +117,7 @@ type WorkspaceSnapshot = {
   guidanceMode: "guided" | "expert";
   evidenceExport: EvidenceExportStatus | null;
   hasJoinedDataset: boolean;
+  dataScopeEvidence?: DataScopeEvidence | null;
 };
 
 function taskRunContentKey(run: TaskRun) {
@@ -171,7 +173,7 @@ function buildMetricQuickTemplates(profile: DatasetProfile): MetricQuickTemplate
     fields: {
       metricType: "count",
       metricName: entityLabel.includes("订单") ? "去重订单量" : `去重${entityLabel}数量`,
-      decisionQuestion: `判断${entityLabel}的总体规模和变化情况`,
+      decisionQuestion: `统计当前范围内不同${entityLabel}的数量`,
       entityField,
       timeField,
       filterScope: `${entityField} 非空的全部记录`,
@@ -286,6 +288,7 @@ export default function Home() {
   const [businessAnalysisPlan, setBusinessAnalysisPlan] = useState<AgentPlan | null>(null);
   const [agentNavigationNotice, setAgentNavigationNotice] = useState("");
   const [taskRun, setTaskRun] = useState<TaskRun | null>(null);
+  const [dataScopeEvidence, setDataScopeEvidence] = useState<DataScopeEvidence | null>(null);
   const [guidanceMode, setGuidanceMode] = useState<"guided" | "expert">("guided");
   const [evidenceExport, setEvidenceExport] = useState<EvidenceExportStatus | null>(null);
   const [hasJoinedDataset, setHasJoinedDataset] = useState(false);
@@ -326,6 +329,9 @@ export default function Home() {
       setRelatedProfiles(snapshot.relatedProfiles);
       setOriginalProfile(snapshot.originalProfile);
       setCleaningReceipt(snapshot.cleaningReceipt);
+      setDataScopeEvidence(snapshot.dataScopeEvidence ?? (snapshot.cleaningReceipt && snapshot.originalProfile && snapshot.datasetProfile
+        && snapshot.cleaningReceipt.sourceFileName === snapshot.originalProfile.fileName
+        ? createDataScopeEvidence(snapshot.originalProfile, snapshot.datasetProfile, snapshot.cleaningReceipt, snapshot.metricDraft?.entityField ?? null, snapshot.taskRun?.id ?? null) : null));
       setProfileView(snapshot.profileView);
       setQualityDecisions(snapshot.qualityDecisions);
       setMetricDraft(snapshot.metricDraft);
@@ -359,7 +365,7 @@ export default function Home() {
         version: 1, savedAt: new Date().toISOString(), query, submittedQuery, analysisMode,
         datasetProfile, relatedProfiles, originalProfile, cleaningReceipt, profileView,
         qualityDecisions, metricDraft, metricContract, executionQualityImpact, agentResponse,
-        businessAnalysisPlan, taskRun, guidanceMode, evidenceExport, hasJoinedDataset,
+        businessAnalysisPlan, taskRun, guidanceMode, evidenceExport, hasJoinedDataset, dataScopeEvidence,
       };
       void saveWorkspaceSession(snapshot).catch((error) => {
         setPersistence({ status: "error", message: `浏览器工作区保存失败：${error instanceof Error ? error.message : "可能已超出存储配额"}` });
@@ -368,7 +374,7 @@ export default function Home() {
     return () => window.clearTimeout(timer);
   }, [query, submittedQuery, analysisMode, datasetProfile, relatedProfiles, originalProfile, cleaningReceipt,
     profileView, qualityDecisions, metricDraft, metricContract, executionQualityImpact, agentResponse,
-    businessAnalysisPlan, taskRun, guidanceMode, evidenceExport, hasJoinedDataset]);
+    businessAnalysisPlan, taskRun, guidanceMode, evidenceExport, hasJoinedDataset, dataScopeEvidence]);
 
   useEffect(() => {
     latestTaskRunRef.current = taskRun;
@@ -433,6 +439,7 @@ export default function Home() {
       setRelatedProfiles([]);
       setOriginalProfile(profile);
       setCleaningReceipt(null);
+      setDataScopeEvidence(null);
       setQualityDecisions({});
       setMetricDraft(createMetricDraft(profile));
       setMetricContract(null);
@@ -497,6 +504,7 @@ export default function Home() {
     setRelatedProfiles([]);
     setOriginalProfile(null);
     setCleaningReceipt(null);
+    setDataScopeEvidence(null);
     setFileError("");
     setQualityDecisions({});
     setMetricDraft(null);
@@ -514,15 +522,19 @@ export default function Home() {
   }
 
   function applyCleanedProfile(profile: DatasetProfile, receipt: CleaningReceipt) {
+    if (!datasetProfile) return;
+    const scope = createDataScopeEvidence(datasetProfile, profile, receipt, agentResponse?.plan.fieldBindings.entityField ?? metricDraft?.entityField ?? null, taskRun?.id ?? null);
+    setDataScopeEvidence(scope);
     setDatasetProfile(profile);
     setCleaningReceipt(receipt);
     setQualityDecisions({});
-    setMetricDraft(createMetricDraft(profile));
+    setMetricDraft(metricDraft ? rebindMetricDraft(metricDraft, profile) : createMetricDraft(profile));
     setMetricContract(null);
     setExecutionQualityImpact(null);
     setContractErrors([]);
-    setAgentResponse(null);
-    setBusinessAnalysisPlan(null);
+    setTaskRun(agentResponse ? rebindTaskAfterCleaning(profile, submittedQuery || taskRun?.question || "待确认的原分析任务", agentResponse, taskRun, scope) : null);
+    setEvidenceExport(null);
+    setAgentNavigationNotice("清洗已改变数据版本，原问题和分析类型已保留。请核对范围变化并重新确认口径；本步骤未重新调用模型。");
     setProfileView("质量检查");
   }
 
@@ -531,6 +543,7 @@ export default function Home() {
     setOriginalProfile(profile);
     setRelatedProfiles([]);
     setCleaningReceipt(null);
+    setDataScopeEvidence(null);
     setQualityDecisions({});
     setMetricDraft(createMetricDraft(profile));
     setMetricContract(null);
@@ -551,14 +564,17 @@ export default function Home() {
     if (!originalProfile) return;
     setDatasetProfile(originalProfile);
     setCleaningReceipt(null);
+    setDataScopeEvidence(null);
     setQualityDecisions({});
     setMetricDraft(createMetricDraft(originalProfile));
     setMetricContract(null);
     setExecutionQualityImpact(null);
     setContractErrors([]);
-    setAgentResponse(null);
-    setTaskRun(null);
-    setBusinessAnalysisPlan(null);
+    if (agentResponse) {
+      const restored = createTaskRunFromPlan(originalProfile, submittedQuery || "待确认的原分析任务", agentResponse);
+      setTaskRun({ ...restored, planningEvidence: { ...structuredClone(taskRun?.planningEvidence ?? restored.planningEvidence!),
+        reusedFrom: { taskId: taskRun?.id ?? null, datasetVersionId: taskRun?.datasetVersions.at(-1)?.versionId ?? restored.datasetVersions[0].versionId, reason: "恢复原始数据后沿用原计划，未新增模型请求；审批需重新确认。" } } });
+    } else setTaskRun(null);
     setProfileView("质量检查");
   }
 
@@ -606,7 +622,15 @@ export default function Home() {
 
   function confirmMetricContract() {
     if (!datasetProfile || !metricDraft) return;
+    if (analysisConfirmationView(agentResponse?.plan ?? businessAnalysisPlan, submittedQuery) === "经营分析") {
+      setContractErrors(["原问题需要分组或时间分析，不能用单指标合同替代。请进入经营分析确认原任务"]);
+      if (agentResponse) setBusinessAnalysisPlan(agentResponse.plan);
+      setProfileView("经营分析");
+      setAgentNavigationNotice("保留原问题的分组或时间分析目标，请在经营分析中选择指标并确认。");
+      return;
+    }
     const errors = validateMetricDraft(metricDraft, datasetProfile.qualityIssues.length + datasetProfile.qualityChecksSkipped.length);
+    if (isDistinctCountQuestion(submittedQuery) && metricDraft.metricType !== "count") errors.push("原问题要求统计数量，当前草案已改为其他计算。请恢复计数，或开始新的分析明确新目标");
     setContractErrors(errors);
     if (errors.length > 0) return;
     setMetricContract(buildMetricContract(metricDraft, datasetProfile, qualityDecisions));
@@ -626,10 +650,17 @@ export default function Home() {
   }
 
   function continueToMetricExecution() {
+    if (analysisConfirmationView(agentResponse?.plan ?? businessAnalysisPlan, submittedQuery) === "经营分析") {
+      if (agentResponse) setBusinessAnalysisPlan(agentResponse.plan);
+      setProfileView("经营分析");
+      setAgentNavigationNotice("原问题需要分组或时间分析，请在经营分析中确认；未改为单指标任务。");
+      return;
+    }
     if (datasetProfile && metricContract && !agentResponse) {
       const response = buildManualMetricAgentResponse(metricContract);
       setAgentResponse(response);
-      setTaskRun(createTaskRunFromPlan(datasetProfile, metricContract.metricName, response, { qualityDecisions }));
+      const next = createTaskRunFromPlan(datasetProfile, submittedQuery || metricContract.decisionQuestion || metricContract.metricName, response, { qualityDecisions });
+      setTaskRun(dataScopeEvidence ? { ...next, dataScopeEvidence: structuredClone(dataScopeEvidence) } : next);
       if (!submittedQuery) setSubmittedQuery(metricContract.metricName);
     }
     setProfileView("计算执行");
@@ -753,12 +784,20 @@ export default function Home() {
   function freshInteractiveRun(responseOverride?: AgentPlanResponse) {
     const response = agentResponse ?? responseOverride;
     if (!datasetProfile || !response) return null;
-    if (taskRun && ["NEEDS_CLARIFICATION", "NEEDS_APPROVAL", "READY_TO_EXECUTE"].includes(taskRun.state)) return taskRun;
-    return createTaskRunFromPlan(datasetProfile, submittedQuery || metricContract?.metricName || "受控指标计算", response, { qualityDecisions });
+    if (taskRun && ["NEEDS_CLARIFICATION", "NEEDS_APPROVAL", "READY_TO_EXECUTE"].includes(taskRun.state)) {
+      return dataScopeEvidence ? { ...taskRun, dataScopeEvidence: structuredClone(dataScopeEvidence) } : taskRun;
+    }
+    const next = createTaskRunFromPlan(datasetProfile, submittedQuery || metricContract?.metricName || "受控指标计算", response, { qualityDecisions });
+    return dataScopeEvidence ? { ...next, dataScopeEvidence: structuredClone(dataScopeEvidence) } : next;
   }
 
   function requireQualityExecutionReady() {
     if (!datasetProfile) return false;
+    if (dataScopeEvidence && !dataScopeEvidence.confirmedAt) {
+      setAgentNavigationNotice("清洗已改变数据范围，请先核对并确认范围变化。");
+      document.getElementById("data-scope-review")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return false;
+    }
     const gate = qualityExecutionStatus(datasetProfile, qualityDecisions, cleaningReceipt);
     if (gate.ready) return true;
     setProfileView(gate.needsCleaningConfirmation ? "清洗方案" : "质量检查");
@@ -840,6 +879,7 @@ export default function Home() {
         datasetProfile,
         event.config.baseFilter.enabled ? [event.config.baseFilter] : [],
       );
+      base.question = submittedQuery || next.question || base.question;
       const spec = event.contract.metricType === "ratio" ? {
         ...base,
         numerator: { description: event.contract.formula, filter: event.config.ratioNumerator },
@@ -977,7 +1017,7 @@ export default function Home() {
       ? "verify"
       : !qualityReviewComplete
         ? "quality"
-        : !metricContract && !businessAnalysisPlan
+        : !metricContract && !businessAnalysisPlan && !(agentResponse && analysisConfirmationView(agentResponse.plan, submittedQuery) === "经营分析")
           ? "define"
           : "execute";
   const guidedTemplates = datasetProfile ? buildGuidedTemplates(datasetProfile) : [];
@@ -1003,10 +1043,10 @@ export default function Home() {
     detail: `已判断 ${decidedQualityIssues}/${datasetProfile!.qualityIssues.length} 项；“暂不处理”只表示保留原始数据和风险说明，不代表问题已经解决。`,
     actionLabel: "查看质量问题",
   } : guideStep === "define" ? {
-    title: "用一句话说清业务问题",
+    title: agentResponse?.plan.analysisType === "metric" ? "核对系统生成的口径草案" : "用一句话说清业务问题",
     description: "至少说明统计对象、指标、分组或时间，以及金额是否包含运费、税费、退款。",
     detail: "下方模板会使用当前文件中的真实字段，点击只会填入，不会立即计算。",
-    actionLabel: "填写分析问题",
+    actionLabel: agentResponse?.plan.analysisType === "metric" ? "核对指标口径" : "填写分析问题",
   } : guideStep === "execute" ? {
     title: "确认口径后再执行",
     description: "模型负责拆解问题和推荐字段；程序按照已确认的结构化规则计算。",
@@ -1031,11 +1071,20 @@ export default function Home() {
     if (guideStep === "join") setProfileView("多表关联");
     if (guideStep === "quality") setProfileView("质量检查");
     if (guideStep === "define") {
+      if (agentResponse?.plan.analysisType === "metric") {
+        if (!metricDraft?.metricName.trim()) navigateFromAgent("指标口径", agentResponse.plan);
+        else setProfileView("指标口径");
+        return;
+      }
       queryInputRef.current?.focus();
       queryInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
-    if (guideStep === "execute") setProfileView(businessAnalysisPlan ? "经营分析" : "计算执行");
+    if (guideStep === "execute") {
+      const target = analysisConfirmationView(agentResponse?.plan ?? businessAnalysisPlan, submittedQuery);
+      if (target === "经营分析" && agentResponse) setBusinessAnalysisPlan(agentResponse.plan);
+      setProfileView(target === "经营分析" ? target : "计算执行");
+    }
     if (guideStep === "verify") {
       taskRunRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
@@ -1059,13 +1108,19 @@ export default function Home() {
       document.getElementById(`quality-issue-${firstUndecided.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
-    setProfileView(needsCleaningConfirmation ? "清洗方案" : "指标口径");
+    const target = analysisConfirmationView(agentResponse?.plan ?? businessAnalysisPlan, submittedQuery);
+    if (target === "经营分析" && agentResponse) setBusinessAnalysisPlan(agentResponse.plan);
+    if (!needsCleaningConfirmation && target === "指标口径" && agentResponse?.plan.analysisType === "metric" && !metricDraft?.metricName.trim()) {
+      navigateFromAgent(target, agentResponse.plan);
+      return;
+    }
+    setProfileView(needsCleaningConfirmation ? "清洗方案" : target);
     window.requestAnimationFrame(() => profileCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
 
   const executionQualityGate = {
-    ready: qualityReviewComplete,
-    message: needsCleaningConfirmation
+    ready: qualityReviewComplete && (!dataScopeEvidence || Boolean(dataScopeEvidence.confirmedAt)),
+    message: dataScopeEvidence && !dataScopeEvidence.confirmedAt ? "清洗已改变数据范围，请先核对并确认范围变化。" : needsCleaningConfirmation
       ? "已批准的清洗规则还没有生成并确认派生副本。请先完成清洗预览与确认。"
       : `还有 ${qualityGateStatus.undecided} 项质量风险未判断。请逐项记录保留、核实或处理决定。`,
     onReview: handleQualityGuideAction,
@@ -1327,6 +1382,20 @@ export default function Home() {
                 </div>
               )}
 
+              {dataScopeEvidence && (
+                <section className="data-scope-review" id="data-scope-review" aria-label="清洗后的分析范围确认">
+                  <strong>清洗改变了统计范围，请重新核对</strong>
+                  <p>{dataScopeEvidence.source.fileName} → {dataScopeEvidence.derived.fileName}：{dataScopeEvidence.source.rowCount} → {dataScopeEvidence.derived.rowCount} 行。</p>
+                  {dataScopeEvidence.entityField && <p>{dataScopeEvidence.entityField} 的非空唯一编号：{dataScopeEvidence.sourceDistinctEntities} → {dataScopeEvidence.derivedDistinctEntities}。清洗后的数量不能直接代表原始文件的订单数。</p>}
+                  <label><input type="checkbox" aria-label="确认清洗后的分析范围" disabled={analysisCompleted} checked={Boolean(dataScopeEvidence.confirmedAt)} onChange={(event) => {
+                    const updated = { ...dataScopeEvidence, confirmedAt: event.target.checked ? new Date().toISOString() : null };
+                    setDataScopeEvidence(updated);
+                    setTaskRun(current => current && current.state !== "COMPLETED" ? { ...current, dataScopeEvidence: updated } : current);
+                    if (!event.target.checked) invalidateCompletedAnalysis("数据范围确认已撤销，请重新核对后执行。");
+                  }} />我确认这次使用清洗后的范围；若要统计原始范围，请恢复原始数据。</label>
+                </section>
+              )}
+
               {profileView === "画像" ? (
                 <>
                   <div className="profile-stats">
@@ -1527,8 +1596,11 @@ export default function Home() {
                   receipt={cleaningReceipt}
                   onApply={applyCleanedProfile}
                   onRestore={restoreOriginalProfile}
+                  nextLabel={analysisConfirmationView(agentResponse?.plan ?? businessAnalysisPlan, submittedQuery)}
                   onSkip={() => {
-                    setProfileView("指标口径");
+                    const target = analysisConfirmationView(agentResponse?.plan ?? businessAnalysisPlan, submittedQuery);
+                    if (target === "经营分析" && agentResponse) setBusinessAnalysisPlan(agentResponse.plan);
+                    setProfileView(target);
                     setAgentNavigationNotice("未生成清洗副本；当前数据保持不变，人工核实结论与质量风险会保留在结果证据中。");
                     window.requestAnimationFrame(() => profileCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
                   }}
@@ -1576,6 +1648,13 @@ export default function Home() {
                     </section>
                   )}
 
+                    <div className="analysis-draft-summary" aria-label="系统生成的指标口径草案">
+                      <strong>先核对这次准备怎么算</strong>
+                      <p>原问题：{submittedQuery || metricDraft.decisionQuestion || "尚未填写"}</p>
+                      <p>{readableMetricDraft(metricDraft, datasetProfile).operation}</p>
+                      <small>{readableMetricDraft(metricDraft, datasetProfile).source}</small>
+                      <p>下面是可修改的草案。名称和业务用途可以预填；是否使用这个统计对象与范围仍由你确认。</p>
+                    </div>
                   <fieldset className="metric-type-fieldset">
                     <legend>1. 选择指标类型</legend>
                     <div className="metric-type-grid">
@@ -1780,7 +1859,10 @@ export default function Home() {
                   key={metricContract ? `${metricContract.metricName}-${metricContract.formula}` : "locked"}
                   contract={metricContract}
                   profile={datasetProfile}
-                  qualityGate={executionQualityGate}
+                  qualityGate={analysisConfirmationView(agentResponse?.plan ?? businessAnalysisPlan, submittedQuery) === "经营分析" ? {
+                    ready: false, message: "原问题需要分组或时间分析，请在经营分析中确认，不能执行单指标替代结果。",
+                    onReview: () => { if (agentResponse) setBusinessAnalysisPlan(agentResponse.plan); setProfileView("经营分析"); },
+                  } : executionQualityGate}
                   onExecution={handleMetricExecution}
                   onReviewEvidence={() => taskRunRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })}
                 />

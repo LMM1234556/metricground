@@ -2,7 +2,7 @@ import type { TaskRun } from "./task-run";
 
 export type EvidencePackage = {
   format: "metricground-evidence";
-  version: "1.0" | "1.1" | "1.2" | "1.3";
+  version: "1.0" | "1.1" | "1.2" | "1.3" | "1.4";
   exportedAt: string;
   integrity: { algorithm: "fnv1a32-pair-v1"; checksum: string };
   task: {
@@ -33,6 +33,7 @@ export type EvidencePackage = {
   planningEvidence?: TaskRun["planningEvidence"] | null;
   qualityEvidence?: TaskRun["qualityEvidence"] | null;
   resultEvidence?: TaskRun["resultEvidence"] | null;
+  dataScopeEvidence?: TaskRun["dataScopeEvidence"] | null;
   privacy: {
     rawRowsIncluded: false;
     statement: string;
@@ -116,7 +117,7 @@ export function buildEvidencePackage(run: TaskRun, exportedAt = new Date().toISO
   const snapshotAt = completedAt ?? exportedAt;
   const withoutIntegrity = {
     format: "metricground-evidence" as const,
-    version: "1.3" as const,
+    version: "1.4" as const,
     exportedAt: snapshotAt,
     task: { id: evidenceRun.id, question: evidenceRun.question, state: evidenceRun.state, createdAt: evidenceRun.createdAt, updatedAt: evidenceRun.updatedAt },
     datasets: evidenceRun.datasetVersions,
@@ -125,6 +126,7 @@ export function buildEvidencePackage(run: TaskRun, exportedAt = new Date().toISO
     planningEvidence: evidenceRun.planningEvidence ?? null,
     qualityEvidence: evidenceRun.qualityEvidence ?? null,
     resultEvidence: evidenceRun.resultEvidence ?? null,
+    dataScopeEvidence: evidenceRun.dataScopeEvidence ?? null,
     approvals: evidenceRun.approvals,
     toolCalls: evidenceRun.toolCalls.map((call) => ({
       id: call.id,
@@ -222,6 +224,7 @@ function renderPlanning(evidence: EvidencePackage) {
     `- Token 用量：输入 ${planning.usage?.inputTokens ?? "未记录"}，输出 ${planning.usage?.outputTokens ?? "未记录"}`,
     "- 范围说明：模型/规则只生成候选分析计划，最终计算使用人工批准的结构化口径和确定性引擎；规划用量不是费用账单，也不包含未记录的失败请求。",
     "- 候选计划中的置信度为程序设置的提示值，不是模型准确率或经校准的概率。",
+    ...(planning.reusedFrom ? [`- 计划沿用来源：${planning.reusedFrom.taskId ?? "未记录任务号"} / ${planning.reusedFrom.datasetVersionId}。${planning.reusedFrom.reason} 上述模型用量属于原规划，不能当作本派生任务新增调用。`] : []),
     "",
     "### 模型提交的结构化决策与程序调整",
     "",
@@ -302,6 +305,18 @@ export function evidenceAsMarkdown(evidence: EvidencePackage) {
     "## 数据版本",
     "",
     datasets,
+    "",
+    "## 数据范围变化与确认",
+    "",
+    ...(evidence.dataScopeEvidence ? [
+      `- 原始问题：${evidence.task.question}`,
+      `- 范围：${evidence.dataScopeEvidence.source.fileName} ${evidence.dataScopeEvidence.source.rowCount} 行 → ${evidence.dataScopeEvidence.derived.fileName} ${evidence.dataScopeEvidence.derived.rowCount} 行。`,
+      `- 非空唯一编号 ${evidence.dataScopeEvidence.entityField ?? "未选择"}：${evidence.dataScopeEvidence.sourceDistinctEntities ?? "未记录"} → ${evidence.dataScopeEvidence.derivedDistinctEntities ?? "未记录"}。`,
+      `- 范围确认：${evidence.dataScopeEvidence.confirmedAt ?? "尚未确认，不允许执行"}`,
+      ...evidence.dataScopeEvidence.receipt.actions.map(action => `- ${action.actionLabel}：移除 ${action.affectedRows} 行。`),
+      "",
+      codeBlock(JSON.stringify(evidence.dataScopeEvidence, null, 2)),
+    ] : ["本任务未记录清洗范围变化；历史任务若只保存清洗后文件，不能反推出删行规则。"]),
     "",
     "## 结构化分析口径（批准状态见下）",
     "",

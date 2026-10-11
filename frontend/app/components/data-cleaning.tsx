@@ -15,10 +15,11 @@ type Props = {
   onApply: (profile: DatasetProfile, receipt: CleaningReceipt) => void;
   onRestore: () => void;
   onSkip: () => void;
+  nextLabel?: string;
 };
 
 export default function DataCleaning({
-  profile, originalProfile, decisions, receipt, onApply, onRestore, onSkip,
+  profile, originalProfile, decisions, receipt, onApply, onRestore, onSkip, nextLabel = "指标口径",
 }: Props) {
   const repairableIssues = profile.qualityIssues.filter((issue) => issue.supportedRepair);
   const reviewOnlyIssues = profile.qualityIssues.filter((issue) => !issue.supportedRepair);
@@ -82,9 +83,9 @@ export default function DataCleaning({
         <section className="cleaning-skip-guide" role="status">
           <div>
             <Check size={16} />
-            <span><strong>当前没有批准任何自动清洗规则</strong><small>“确认已核实”只记录字段粒度或异常解释，不代表授权删除数据。你可以直接进入指标口径。</small></span>
+            <span><strong>当前没有批准任何自动清洗规则</strong><small>“确认已核实”只记录字段粒度或异常解释，不代表授权删除数据。你可以继续确认原分析任务。</small></span>
           </div>
-          <button type="button" onClick={onSkip}>跳过清洗，进入指标口径<ChevronRight size={14} /></button>
+          <button type="button" onClick={onSkip}>跳过清洗，进入{nextLabel}<ChevronRight size={14} /></button>
         </section>
       )}
 

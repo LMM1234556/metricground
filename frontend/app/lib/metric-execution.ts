@@ -1,4 +1,5 @@
 import type { MetricContract } from "./metric-contract";
+import { metricNameTypeConflict } from "./metric-contract.ts";
 import type { CellValue, DatasetProfile } from "./tabular-profile";
 import { assessQualityImpact, type QualityImpactSummary } from "./quality-impact.ts";
 import type { IndependentVerification } from "./independent-verification";
@@ -153,6 +154,7 @@ function ruleError(rule: FilterRule, label: string) {
 
 export function buildExecutionPlan(contract: MetricContract, config: ExecutionConfig): ExecutionPlan {
   const errors = [ruleError(config.baseFilter, "基础筛选")];
+  errors.push(metricNameTypeConflict(contract.metricName, contract.metricType));
   if (contract.metricType === "ratio") errors.push(ruleError(config.ratioNumerator, "分子条件"));
   const validErrors = errors.filter((error): error is string => Boolean(error));
   const entity = escapeIdentifier(contract.statisticalUnit);

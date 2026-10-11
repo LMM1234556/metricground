@@ -70,7 +70,7 @@ export function createMetricDraft(profile: DatasetProfile): MetricDraft {
     entityField: identifier,
     valueField: numeric,
     timeField: date,
-    filterScope: "全部有效记录",
+    filterScope: "当前数据版本的全部记录（未按订单状态筛选）",
     numeratorDefinition: "",
     denominatorDefinition: "",
     grainDescription: identifier ? `一行代表一条业务记录，按 ${identifier} 识别统计对象。` : "",
@@ -78,6 +78,13 @@ export function createMetricDraft(profile: DatasetProfile): MetricDraft {
     qualityAcknowledged: false,
     definitionConfirmed: false,
   };
+}
+
+export function metricNameTypeConflict(metricName: string, metricType: MetricType): string | null {
+  const quantityName = /订单(?:量|数量|数)|客户(?:数量|数)|用户(?:数量|数)|商品(?:数量|数)/.test(metricName);
+  const ratioName = /率|比例|占比/.test(metricName);
+  return quantityName && !ratioName && metricType !== "count"
+    ? "指标名称表示数量，但当前公式不是计数。请改为计数指标，或修改名称明确金额/平均值含义" : null;
 }
 
 export function validateMetricDraft(draft: MetricDraft, qualityIssueCount: number): string[] {
@@ -94,6 +101,8 @@ export function validateMetricDraft(draft: MetricDraft, qualityIssueCount: numbe
     if (draft.denominatorDefinition.trim().length < 2) errors.push("请定义比例指标的分母");
   }
   if (!draft.filterScope.trim()) errors.push("请填写数据范围或筛选条件");
+  const conflict = metricNameTypeConflict(draft.metricName, draft.metricType);
+  if (conflict) errors.push(conflict);
   if (!draft.grainConfirmed) errors.push("请确认数据粒度");
   if (qualityIssueCount > 0 && !draft.qualityAcknowledged) errors.push("请确认已知的数据质量风险");
   if (!draft.definitionConfirmed) errors.push("请确认指标定义不等于收入、利润等其他概念");
@@ -112,6 +121,8 @@ export function buildMetricContract(
   profile: DatasetProfile,
   qualityDecisions: Record<string, "approved" | "kept">,
 ): MetricContract {
+  const conflict = metricNameTypeConflict(draft.metricName, draft.metricType);
+  if (conflict) throw new Error(conflict);
   const approved = profile.qualityIssues.filter((issue) =>
     issue.supportedRepair && qualityDecisions[issue.id] === "approved"
   ).length;
@@ -169,6 +180,17 @@ export function buildMetricContract(
     warnings,
     status: "confirmed",
   };
+}
+
+export function readableMetricDraft(draft: MetricDraft, profile: DatasetProfile) {
+  const subject = draft.entityField || "待选择的统计编号";
+  const value = draft.valueField || "待选择的数值字段";
+  const operation = draft.metricType === "count" ? `按 ${subject} 统计不同编号；相同编号出现多行也只算一次，空编号不计入。`
+    : draft.metricType === "amount" ? `将 ${value} 中可转换为数字的值相加；无效数值会排除并计数。`
+    : draft.metricType === "average" ? `将有效 ${value} 相加，再除以这些记录中的不同 ${subject} 数量；不是统计订单笔数。`
+    : `按你定义的分子和分母计算去重 ${subject} 的比例；执行前还需确认结构化条件。`;
+  return { question: draft.decisionQuestion || "请说明本次业务目标", operation,
+    source: `当前使用 ${profile.fileName} 的 ${profile.rowCount} 行记录。订单状态筛选请在执行页明确设置；文字说明不会自动变成筛选条件。` };
 }
 
 export function contractAsText(contract: MetricContract) {

@@ -18,6 +18,7 @@ export type PlanningEvidence = {
   proposal?: AgentPlan | null;
   modelDecision?: ModelPlanningDecision | null;
   planAdjustments?: PlanAdjustment[] | null;
+  reusedFrom?: { taskId: string | null; datasetVersionId: string; reason: string };
 };
 
 export type QualityEvidence = {

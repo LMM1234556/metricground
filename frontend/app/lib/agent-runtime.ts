@@ -72,6 +72,10 @@ export function approveTaskRun(
   run: TaskRun,
   input: { type: ApprovalType; statement: string; spec?: AnalysisSpec; now?: string },
 ) {
+  if (run.dataScopeEvidence && !run.dataScopeEvidence.confirmedAt) throw new Error("清洗后的分析范围尚未确认，不能批准执行。");
+  if (input.spec && run.dataScopeEvidence && input.spec.sources.find(source => source.role === "primary")?.versionId !== run.dataScopeEvidence.derived.versionId) {
+    throw new Error("执行口径与已确认的清洗数据版本不一致。");
+  }
   if (input.spec) {
     const validation = validateAnalysisSpec(input.spec, run.datasetVersions);
     if (!validation.valid) throw new Error(`AnalysisSpec 未通过校验：${validation.errors.join("；")}`);

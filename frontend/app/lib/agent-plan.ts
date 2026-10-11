@@ -88,7 +88,7 @@ export function inferStrongAnalysisType(question: string): AgentAnalysisType | n
   if (/数据画像|字段结构|字段类型|多少行|多少列|查看字段/i.test(question)) return "profile";
   if (/趋势|月度|按月|同比|环比|随时间|时间变化/i.test(question)) return "trend";
   if (isRankingQuestion(question)) return "top_n";
-  if (/各地区|各区域|各品类|各渠道|按[^，。！？]{0,10}(?:地区|区域|品类|渠道)|分组|分群/i.test(question)) return "group_compare";
+  if (/各地区|各区域|各品类|各渠道|(?:比较|对比)(?:不同|各个|各)?(?:地区|区域|渠道|品类)|按[^，。！？]{0,10}(?:地区|区域|品类|渠道)|分组|分群/i.test(question)) return "group_compare";
   if (isDistinctCountQuestion(question) || /总额|合计|平均|均值|比例|率|销售额|金额|gmv|收入|营收/i.test(question)) return "metric";
   return null;
 }

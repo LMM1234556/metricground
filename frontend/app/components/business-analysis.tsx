@@ -113,6 +113,12 @@ export default function BusinessAnalysis({ profile, agentPlan, question, quality
       </div>
 
       <section className="business-analysis-config">
+        <div className="analysis-draft-summary" role="status">
+          <strong>本次准备回答：{question || "比较当前数据中的业务分组"}</strong>
+          <p>{config.analysisType === "trend" ? `按 ${config.timeField || "待选时间字段"} 观察变化` : `按 ${config.groupField || "待选分组字段"} 分组比较`}，
+            {config.aggregation === "count_distinct" ? `比较不同 ${config.entityField || "统计编号"} 的数量` : config.aggregation === "sum" ? `比较 ${config.valueField || "待选数值"} 的合计` : `比较 ${config.valueField || "待选数值"} 合计除以不同 ${config.entityField || "统计编号"} 数的平均金额`}。</p>
+          <small>使用 {profile.fileName} 的 {profile.rowCount} 行记录；“表现”需要你选择具体指标，系统不会自动定义为收入或利润。</small>
+        </div>
         <div className="execution-section-title"><strong>1. 确认分析任务</strong><span>字段变化后需要重新确认</span></div>
         <div className="business-analysis-types">
           {ANALYSIS_TYPES.map((item) => (

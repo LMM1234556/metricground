@@ -351,6 +351,13 @@ button { cursor:pointer; }
 .cleaned-version-banner strong,.cleaned-version-banner span { display:block; }
 .cleaned-version-banner strong { font-size:10.5px; }
 .cleaned-version-banner span { margin-top:3px; color:#5a766f; font-size:9px; line-height:1.5; }
+.analysis-draft-summary { margin:12px 0; padding:14px; border:1px solid #bdcfea; border-radius:10px; background:#f5f8ff; color:#263c5c; }
+.analysis-draft-summary p { margin:7px 0; line-height:1.6; font-size:13px; }
+.analysis-draft-summary small { display:block; line-height:1.6; font-size:12px; }
+.data-scope-review { margin:14px 18px 0; padding:14px; border:1px solid #e5b85f; border-radius:10px; background:#fff9ed; color:#714e12; }
+.data-scope-review p { margin:7px 0; line-height:1.6; font-size:13px; }
+.data-scope-review label { display:flex; align-items:flex-start; gap:8px; font-size:13px; line-height:1.6; }
+.data-scope-review input { margin-top:4px; flex:none; }
 .cleaning-workbench { padding:16px 18px 18px; }
 .cleaning-intro { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; padding:14px; border:1px solid #cfe5df; border-radius:11px; background:linear-gradient(135deg,#f1faf7,#f8fcfb); }
 .cleaning-intro > div:first-child > span { color:#0f766e; font-size:9px; font-weight:700; }
