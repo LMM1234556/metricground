@@ -39,8 +39,11 @@ try {
   await command("Page.reload", { ignoreCache: true });
   await evaluate(`(async () => {
     const until = Date.now() + 15000;
-    while (!document.querySelector('input[type="file"]')) {
-      if (Date.now() > until) throw new Error('Upload input not ready');
+    while (true) {
+      const input = document.querySelector('input[type="file"]');
+      const reactReady = input && Object.keys(input).some(key => key.startsWith('__reactProps$'));
+      if (reactReady) break;
+      if (Date.now() > until) throw new Error('Hydrated upload input not ready');
       await new Promise(resolve => setTimeout(resolve, 100));
     }
     window.__evidenceDownloads = [];
@@ -123,7 +126,7 @@ try {
   assert(jsonFile && markdownFile, "Both download paths must produce actual contents");
   const evidence = JSON.parse(jsonFile.content);
   const verification = evidence.toolCalls.find((call) => call.tool === "validate_result").input;
-  assert.equal(evidence.version, "1.1");
+  assert.equal(evidence.version, "1.2");
   assert.equal(verifyEvidencePackage(evidence), true);
   const reportChecksum = markdownFile.content.match(/完整性校验：fnv1a32-pair-v1 \/ ([0-9a-f]{16})/)?.[1];
   assert.equal(reportChecksum, evidence.integrity.checksum, "报告与审计 JSON 必须共享同一证据快照校验和");
@@ -135,6 +138,11 @@ try {
   assert.equal(evidence.analysisSpec.valueField, "item_sales");
   assert.equal(evidence.analysisSpec.groupBy[0].field, "region");
   assert.equal(evidence.planningEvidence.source, "policy-router");
+  assert.equal(evidence.planningEvidence.proposal.analysisType, "group_compare");
+  assert.deepEqual(evidence.planningEvidence.proposal.fieldBindings, {
+    entityField: "order_id", valueField: "item_sales", groupField: "region", timeField: null,
+  });
+  assert(markdownFile.content.includes("人工确认前的候选计划"));
   assert.equal(evidence.qualityEvidence.issues.length, 3);
   assert(evidence.qualityEvidence.issues.every((issue) => issue.decision === "kept"));
   assert.deepEqual(evidence.resultEvidence.groups.map(({ key, value }) => [key, value]), [["华南", 288.5], ["华东", 189.8], ["华北", 0]]);

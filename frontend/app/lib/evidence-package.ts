@@ -2,7 +2,7 @@ import type { TaskRun } from "./task-run";
 
 export type EvidencePackage = {
   format: "metricground-evidence";
-  version: "1.0" | "1.1";
+  version: "1.0" | "1.1" | "1.2";
   exportedAt: string;
   integrity: { algorithm: "fnv1a32-pair-v1"; checksum: string };
   task: {
@@ -116,7 +116,7 @@ export function buildEvidencePackage(run: TaskRun, exportedAt = new Date().toISO
   const snapshotAt = completedAt ?? exportedAt;
   const withoutIntegrity = {
     format: "metricground-evidence" as const,
-    version: "1.1" as const,
+    version: "1.2" as const,
     exportedAt: snapshotAt,
     task: { id: evidenceRun.id, question: evidenceRun.question, state: evidenceRun.state, createdAt: evidenceRun.createdAt, updatedAt: evidenceRun.updatedAt },
     datasets: evidenceRun.datasetVersions,
@@ -142,7 +142,7 @@ export function buildEvidencePackage(run: TaskRun, exportedAt = new Date().toISO
     events: evidenceRun.events,
     privacy: {
       rawRowsIncluded: false as const,
-      statement: "证据包包含数据版本、结构化口径、聚合结果、质量风险与判断、规划来源、工具摘要和复核 SQL，不包含 Excel/CSV 原始数据行。筛选参数与分组名称可能包含业务信息，请确认后分享。",
+      statement: "证据包包含数据版本、人工确认前候选计划、最终结构化口径、聚合结果、质量风险与判断、规划来源、工具摘要和复核 SQL，不包含 Excel/CSV 原始数据行。候选字段、筛选参数与分组名称可能包含业务信息，请确认后分享。",
     },
   };
   return {
@@ -215,11 +215,25 @@ function renderQuality(evidence: EvidencePackage) {
 function renderPlanning(evidence: EvidencePackage) {
   const planning = evidence.planningEvidence;
   if (!planning) return "未记录规划来源、模型及调用用量（历史任务）；不能据此声称由大模型规划，也不能将未知用量记为 0。";
+  const proposal = planning.proposal;
   return [
     `- 规划来源：${planning.source}；平台：${planning.provider ?? "不适用/未记录"}；模型：${planning.model ?? "无"}`,
     `- 工具规划步骤：${planning.stepsExecuted}；尝试次数：${planning.attempts ?? "未记录"}；规划耗时：${planning.latencyMs} ms`,
     `- Token 用量：输入 ${planning.usage?.inputTokens ?? "未记录"}，输出 ${planning.usage?.outputTokens ?? "未记录"}`,
     "- 范围说明：模型/规则只生成候选分析计划，最终计算使用人工批准的结构化口径和确定性引擎；规划用量不是费用账单，也不包含未记录的失败请求。",
+    "",
+    "### 人工确认前的候选计划",
+    "",
+    ...(proposal ? [
+      `- 分析类型：${proposal.analysisType}；动作：${proposal.action}；置信度：${proposal.confidence}`,
+      `- 候选字段：统计对象 ${proposal.fieldBindings.entityField ?? "未绑定"}；数值 ${proposal.fieldBindings.valueField ?? "未绑定"}；分组 ${proposal.fieldBindings.groupField ?? "未绑定"}；时间 ${proposal.fieldBindings.timeField ?? "未绑定"}`,
+      `- 澄清要求：${proposal.clarification ?? "无"}`,
+      `- 候选工具：${proposal.tools.join("、") || "无"}`,
+      "",
+      "完整候选计划（生成后冻结，不随人工确认改写）：",
+      "",
+      codeBlock(JSON.stringify(proposal, null, 2)),
+    ] : ["历史任务未保存人工确认前的候选计划；不能反推出模型原始字段选择。"]),
   ].join("\n");
 }
 

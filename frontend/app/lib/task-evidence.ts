@@ -1,4 +1,4 @@
-import type { AgentPlanResponse } from "./agent-plan";
+import type { AgentPlan, AgentPlanResponse } from "./agent-plan";
 import { createDatasetVersion } from "./analysis-spec.ts";
 import type { DatasetProfile, QualityIssue } from "./tabular-profile";
 import type { TaskRun } from "./task-run";
@@ -12,6 +12,10 @@ export type PlanningEvidence = {
   attempts: number | null;
   latencyMs: number;
   usage: { inputTokens: number | null; outputTokens: number | null } | null;
+  // Optional for TaskRuns created before v0.3.8. New runs retain the exact
+  // pre-approval proposal so reviewers can distinguish model suggestions from
+  // the final human-confirmed AnalysisSpec.
+  proposal?: AgentPlan | null;
 };
 
 export type QualityEvidence = {
@@ -44,6 +48,13 @@ export function capturePlanningEvidence(response: AgentPlanResponse, capturedAt:
     capturedAt, source: response.source, provider: response.provider ?? null, model: response.model,
     stepsExecuted: response.stepsExecuted, attempts: response.attempts ?? null, latencyMs: response.latencyMs,
     usage: response.usage ? { inputTokens: response.usage.inputTokens, outputTokens: response.usage.outputTokens } : null,
+    proposal: {
+      ...response.plan,
+      tools: [...response.plan.tools],
+      steps: [...response.plan.steps],
+      fieldBindings: { ...response.plan.fieldBindings },
+      limitations: [...response.plan.limitations],
+    },
   };
 }
 

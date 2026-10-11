@@ -51,7 +51,7 @@ assert.deepEqual(evidenceAfterSecondExport, evidence, "报告和审计 JSON 必�
 assert(markdown.includes("证据快照时间：2026-09-20T00:00:03.000Z"));
 assert(markdown.includes("结果有限且行数勾稽通过"));
 assert(markdown.includes("不包含 Excel/CSV 原始数据行"));
-assert.equal(evidence.version, "1.1");
+assert.equal(evidence.version, "1.2");
 const verification = evidence.toolCalls.find((call) => call.tool === "validate_result").input;
 assert.equal(verification.sql, fullSql, "复核 SQL 不得截断");
 assert.deepEqual(verification.parameters, parameters, "绑定参数不得截断");
@@ -64,14 +64,21 @@ assert(markdown.includes("聚合方式：sum") && markdown.includes("包含当�
 assert(markdown.includes("分组对账 — 2/2"));
 assert(markdown.includes("policy-router"));
 assert.equal(evidence.planningEvidence.usage, null, "未记录的用量不能当成 0");
+assert.deepEqual(evidence.planningEvidence.proposal.fieldBindings, { entityField: "order_id", valueField: "amount", groupField: "region", timeField: null });
+assert(markdown.includes("人工确认前的候选计划") && markdown.includes("分析类型：group_compare"));
 assert.equal(evidence.resultEvidence.groups[0].value, 100);
 
+const cloudPlan = structuredClone(plan);
 const cloudRun = createTaskRunFromPlan(profile, "模拟规划记录", {
-  plan, source: "cloud-agent", provider: "dashscope", model: "qwen-plus", stepsExecuted: 2, attempts: 1, latencyMs: 123,
+  plan: cloudPlan, source: "cloud-agent", provider: "dashscope", model: "qwen-plus", stepsExecuted: 2, attempts: 1, latencyMs: 123,
   usage: { inputTokens: 100, outputTokens: 50 },
 }, { now: "2026-09-20T00:00:00.000Z" });
+cloudPlan.analysisType = "top_n";
+cloudPlan.fieldBindings.valueField = "mutated-after-capture";
 const cloudEvidence = buildEvidencePackage(cloudRun);
 assert.deepEqual(cloudEvidence.planningEvidence.usage, { inputTokens: 100, outputTokens: 50 });
+assert.equal(cloudEvidence.planningEvidence.proposal.analysisType, "group_compare", "候选计划必须在 TaskRun 创建时冻结");
+assert.equal(cloudEvidence.planningEvidence.proposal.fieldBindings.valueField, "amount", "后续 UI 修改不能改写模型原始字段选择");
 assert(evidenceAsMarkdown(cloudEvidence).includes("dashscope") && evidenceAsMarkdown(cloudEvidence).includes("qwen-plus"));
 
 const riskyProfile = profileRows([
@@ -100,8 +107,13 @@ assert(legacyMd.includes("未记录规划来源") && legacyMd.includes("未记�
 assert(legacyMd.includes("历史复核 SQL 已截断"));
 assert.equal(buildEvidencePackage(legacyRun).task.id, run.id, "重新导出不得创建另一任务");
 
+const legacyPlanningRun = structuredClone(run);
+delete legacyPlanningRun.planningEvidence.proposal;
+const legacyPlanningMd = evidenceAsMarkdown(buildEvidencePackage(legacyPlanningRun));
+assert(legacyPlanningMd.includes("历史任务未保存人工确认前的候选计划"));
+
 const tampered = structuredClone(evidence);
 tampered.resultSummary = "被篡改";
 assert.equal(verifyEvidencePackage(tampered), false);
 
-console.log(JSON.stringify({ suite: "evidence-v1.1", fullSqlLength: fullSql.length, checksum: evidence.integrity.checksum, tools: evidence.toolCalls.map((call) => call.tool), rawRowsIncluded: evidence.privacy.rawRowsIncluded }, null, 2));
+console.log(JSON.stringify({ suite: "evidence-v1.2", fullSqlLength: fullSql.length, checksum: evidence.integrity.checksum, tools: evidence.toolCalls.map((call) => call.tool), rawRowsIncluded: evidence.privacy.rawRowsIncluded }, null, 2));
