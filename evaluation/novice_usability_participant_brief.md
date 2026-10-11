@@ -1,5 +1,7 @@
 # MetricGround 新人测试任务单（参与者版）
 
+> 本文件保留指定字段的流程验收任务。首次自由表达测试请使用 `evaluation/user_test_round1/` 中对应参与者包，不将照抄本页问题的结果计为陌生表达盲测。
+
 测试地址：<https://metricground.chirpyseed1.chatgpt.site>
 
 ## 开始前

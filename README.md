@@ -2,7 +2,7 @@
 
 MetricGround 面向使用 Excel/CSV 完成常见经营分析的初级数据分析师，提供数据理解、质量检查、指标口径确认、受控计算和结果验证。通用上传数据支持本地 Agent 规划、人工确认、确定性执行、TaskRun 状态追踪与证据导出；Olist 只作为内置演示数据，不再替代用户上传文件的分析结果。
 
-> **交付状态（2026-10-11）**：`v0.3.9` 已部署到 [公开新人测试环境](https://metricground.chirpyseed1.chatgpt.site)，Sites 版本 13。证据格式1.3分开保存模型提交的结构化工具决策、程序逐阶段调整、人工确认前系统候选计划和最终 `AnalysisSpec`。这修正了此前把经程序补齐的候选计划称作“模型原始提案”的表述。[完整 CI 38110914363](https://github.com/LMM1234556/metricground/actions/runs/38110914363) 已通过，包含模拟SDK工具决策、规则与模拟模型双路线下载、持久化和恢复；详见 [验收记录](evaluation/model-decision-provenance-v0.3.9-2026-10-11.md)。本轮没有新增模型请求，检查时全站记录为11/20；新版真实Qwen决策证据尚待新任务验收。
+> **交付状态（2026-10-11）**：`v0.3.9` 已部署到 [公开新人测试环境](https://metricground.chirpyseed1.chatgpt.site)，Sites版本13。[完整 CI 38110914363](https://github.com/LMM1234556/metricground/actions/runs/38110914363) 及一条真实Qwen格式1.3完整链路已验收：模型工具决策、程序调整、人工口径、独立复算和双格式快照均可核对，见 [证据记录](evaluation/model-decision-provenance-v0.3.9-2026-10-11.md)。现进入 [首次用户自由表达测试准备](evaluation/user_test_round1/README.md)，参与者测试尚未开展；准备时云请求为15/20、剩余5次，先安排两人各一次问题，不把少量所有者任务写成盲测准确率或新人成功率。
 
 ![MetricGround 核心经营指标界面](docs/images/overview.png)
 
