@@ -1,6 +1,6 @@
 # MetricGround 当前能力与证据矩阵
 
-> 当前基准日期：2026-10-11（v0.3.9 / Sites 版本13）
+> 当前基准日期：2026-10-11（v0.3.10 / Sites 版本14）
 > 产品阶段：可用于面试演示和目标用户测试的 MVP，不是生产级企业数据平台。
 
 ## 产品定位
@@ -14,7 +14,7 @@ MetricGround 面向使用 Excel/CSV 完成常见经营分析的初级数据分�
 | CSV/XLSX 数据画像 | 已完成 | `verify-file-profile.mjs`、`verify-core-boundaries.mjs`、`verify-upload-boundaries.mjs` | 已限制 10 万行/200 列并拦截常见伪装与二进制文件；复杂合并单元格、多层表头仍未系统验证 |
 | 数据质量检查 | 已完成基础规则 | `verify-quality-checks.mjs`、`verify-quality-impact.mjs` | 跨字段业务规则和企业自定义合法值域仍有限 |
 | 受控清洗副本 | 已完成 | `verify-cleaning-workflow.mjs` | 只允许完全重复、指定字段缺失、无效日期三类白名单规则 |
-| 指标口径合同 | 已完成 | `verify-metric-contract.mjs` | 通用“任意聚合量 / 任意聚合量”比例尚未实现 |
+| 指标口径合同 | 可读草案、名称/类型一致性与原目标检查已加入 | `verify-metric-contract.mjs`、`verify-analysis-handoff.mjs`、`verify-analysis-handoff-ui.mjs` | 文字范围不会自动变成筛选；企业定义仍需确认；真人理解改善待回测，通用任意聚合量比例未实现 |
 | 单指标受控计算 | 已完成 | `verify-controlled-execution.mjs`、`verify-core-boundaries.mjs`、`test:execution:mobile` | 浏览器确定性主计算 + DuckDB-WASM 独立 SQL 复算；已覆盖移动冷缓存模拟 4G，业务口径仍需人工确认 |
 | 分组、趋势、Top N | 已完成 | `verify-business-analysis-core.mjs`、`verify-business-analysis.mjs` | 只支持结构化白名单聚合，不执行任意生成代码 |
 | `AnalysisSpec` | 已完成 | `verify-agent-foundation.mjs` | 当前为项目内部协议，不是外部行业标准 |
@@ -25,14 +25,14 @@ MetricGround 面向使用 Excel/CSV 完成常见经营分析的初级数据分�
 | 健康检查与日志 | 已部署并启用最小告警 | 匿名 `/api/health` 200；Web/D1 为 `ok`；结构化健康事件；每小时 Sites 状态与 Worker 错误检查；12 场景告警状态机演练进入 CI | 当前定时任务尚未调用健康接口做合成探测；真实通知送达仍需平台记录；无完整 APM、升级链和值班流程 |
 | 双表/三表受控关联 | 已完成 | `verify-controlled-join.mjs`、`verify-multi-table-ui.mjs`、`verify-three-table-wizard.mjs` | 最多三表；等值单键/双字段复合键；`N:N` 默认禁止 |
 | 关联金额对账 | 已完成常见金额字段 | `verify-join-reconciliation-ui.mjs` | 自动识别常见金额字段名；非常规字段名尚缺人工指定入口 |
-| 证据包导出 | 格式1.3；自动回归与单条真实Qwen完整链路通过 | `verify-planning-provenance.mjs`、`verify-evidence-package.mjs`、`verify-evidence-download.mjs`；真实任务6cece52d审批前/后规划证据不变，报告/JSON同校验码；CI 38110914363 | 模型决策经参数校验，不是原始HTTP；历史缺失字段不补写；单条所有者链路不等于总体准确率；不含原始行、最多100组并标记截断；不是第三方审计 |
+| 证据包导出 | 格式1.4；清洗交接/范围记录回归通过 | 模型决策、程序调整、原问题、dataScopeEvidence及规划沿用标记；CI38133451599；历史真实Qwen格式1.3链路保留 | 历史缺失字段不补写；模型决策不是原始HTTP；不含原始行、最多100组并标记截断；无第三方审计；新版真人清洗证据待回测 |
 | 跨场景泛化回归 | 已完成自动化测试 | `evaluate-cross-scenarios.mjs`、`evaluate-workbench.mjs` | 自建订单/营销/库存小样本，不等同于真实企业泛化能力 |
 | 自然语言路由与澄清 | 有限范围已验证 | `verify-intent-reliability.mjs` 24 用例；实际规划 API 15 用例；线上匿名探针 10 用例；新增页面交接断言 | 自建规则测试，不代表任意表达理解或模型准确率；关联风险需实际关联证据 |
 | 本地/云模型降级 | 历史真实工具/API/网页链路完成；受限云试验开启 | `verify-cloud-model-trial.mjs`、`verify-hosted-cloud-trial.ps1`；真实任务保存cloud-agent/Qwen元数据、最终口径、计算与复核 | 自建探针和少量网页任务不是盲测准确率；v0.3.8保存的是系统候选计划，不能反推模型工具原决策 |
 | 云模型控费 | 出站门禁与 SQL/fetch 回归完成 | `verify-model-cost-policy.mjs`；累计20次、每问题2次、输出512 Token、输入24KB | 请求量上限不是金额硬上限；本地/公网账本分开；免费保护与账单需控制台核实 |
 | 新人引导自动化验收 | 已完成 | `verify-novice-guide.mjs` 24/24；5 份测试文件均可读取 | 只能证明流程闭环，不代表真实新人理解和独立完成 |
-| 正式目标用户研究 | 首轮自由表达材料完成，尚未开展 | `evaluation/user_test_round1/`、五份参与者ZIP与独立参考值；先P01/P02各一次原话问题，额度准备时剩5 | 开发者设计的目标卡不是独立外部盲测；必须先记录首次参与者原话并冻结版本，规则/模型/兜底及提示后完成分开报告 |
-| 远程仓库与公开入口 | 已发布匿名新人测试环境 | 公开GitHub；Sites13、v0.3.9；完整CI及真实Qwen格式1.3完整链路通过 | 项目所有者链路、模拟回归、首次参与者研究分别报告；正式用户研究未完成 |
+| 正式目标用户研究 | 已收到两份引导反馈并完成修复，回测材料已准备 | `observations_round1.md`记录原范围/原目标未完成，`user_test_round2/`保留待观察项 | 是否首次用户/人工提示与用时未核实；不能计总体成功率或模型准确率；系统模板不是独立表达，也不自动等于主持人帮助 |
+| 远程仓库与公开入口 | v0.3.10已发布匿名测试环境 | Sites14、完整CI38133451599，原话地区比较公网规则规划通过；Web/D1正常 | 当前云请求剩3次；已知规则回归与陌生表达/用户理解研究分别报告，修复回测未完成 |
 | 数据库、权限、多人协作 | 部分完成 | D1 持久化、幂等并发控制、条件式所有者隔离 | 无任务历史 UI、角色权限、团队空间和企业治理，不应描述为企业级数据平台 |
 
 ## 面试时可以陈述的结论
