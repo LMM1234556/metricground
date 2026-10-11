@@ -147,11 +147,19 @@ const result = await evaluate(`(async () => {
   const completedQualityGuide = document.querySelector('.quality-step-guide')?.textContent.replace(/\\s+/g, ' ').trim() ?? '';
   clickByText('.profile-tabs button', '指标口径');
   await new Promise((resolve) => setTimeout(resolve, 60));
+  clickByText('.task-run-complete-actions button', '开始新的分析');
+  clickByText('.profile-tabs button', '指标口径');
+  await new Promise((resolve) => setTimeout(resolve, 60));
   clickByText('.metric-type-grid button', '比例指标');
   await new Promise((resolve) => setTimeout(resolve, 40));
   const completedTraceInvalidatedAfterDefinitionChange = !document.querySelector('.task-run-trace');
+  setText('metricName', '华东订单占比');
+  setText('decisionQuestion', '计算华东订单占全部订单的比例');
   setText('numeratorDefinition', 'region 为华东的订单');
   setText('denominatorDefinition', '全部订单');
+  [...document.querySelectorAll('.contract-confirmations input')].forEach((checkbox) => {
+    if (!checkbox.checked) checkbox.click();
+  });
   clickByText('.contract-submit-row button', '生成并确认');
   await new Promise((resolve) => setTimeout(resolve, 80));
   clickByText('.profile-tabs button', '计算执行');

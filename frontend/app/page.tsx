@@ -1681,7 +1681,7 @@ export default function Home() {
                           name="metricName"
                           value={metricDraft.metricName}
                           onChange={(event) => updateMetricDraft("metricName", event.target.value)}
-                          placeholder="例如：有效订单量"
+                          placeholder="例如：去重订单量"
                         />
                       </label>
                       <label>
@@ -1690,7 +1690,7 @@ export default function Home() {
                           name="decisionQuestion"
                           value={metricDraft.decisionQuestion}
                           onChange={(event) => updateMetricDraft("decisionQuestion", event.target.value)}
-                          placeholder="例如：判断各地区订单规模"
+                          placeholder="例如：了解当前范围内有多少笔不同订单"
                         />
                       </label>
                       <label>
@@ -1812,7 +1812,7 @@ export default function Home() {
                   {contractErrors.length > 0 && (
                     <div className="contract-errors" role="alert">
                       <AlertCircle size={16} />
-                      <div><strong>还不能生成合同</strong><p>{contractErrors.join("；")}。</p></div>
+                      <div><strong>还不能生成合同</strong><p>{contractErrors.join("；")}。</p><button type="button" onClick={startNewAnalysis}>修改分析目标，开始新分析</button></div>
                     </div>
                   )}
 

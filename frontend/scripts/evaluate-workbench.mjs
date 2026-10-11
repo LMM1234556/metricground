@@ -133,6 +133,9 @@ for (const dataset of datasets) {
       'cleaned dataset',
     );
     const cleanedRows = Number(document.querySelector('.dataset-status').textContent.match(/(\\d+) 行/)?.[1]);
+    await waitFor(() => document.querySelector('input[aria-label="确认清洗后的分析范围"]'), 'scope review');
+    document.querySelector('input[aria-label="确认清洗后的分析范围"]').click();
+    await sleep(80);
 
     async function calculate(typeLabel, metricType) {
       const metricName = config.id + '-' + metricType;
