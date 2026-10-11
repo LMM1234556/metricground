@@ -971,7 +971,7 @@ export default function Home() {
       ? ["orders-primary-key", "review-order-grain", "negative-review-rate-range"]
       : ["orders-primary-key", "items-composite-key", "gmv-reconciliation", "purchase-time"];
   const visibleValidation = snapshot.validation.filter((item) => validationIds.includes(item.id));
-  const metricQualityImpact = datasetProfile && metricDraft
+  const metricQualityImpact = datasetProfile && metricDraft && analysisConfirmationView(agentResponse?.plan ?? businessAnalysisPlan, submittedQuery) !== "经营分析"
     ? executionQualityImpact ?? metricContract?.qualityImpact ?? assessQualityImpact(datasetProfile.qualityIssues, {
       metricName: metricDraft.metricName || "当前口径草案",
       metricType: metricDraft.metricType,
@@ -1617,7 +1617,7 @@ export default function Home() {
                     <div>
                       <span className="contract-kicker">指标口径确认器</span>
                       <h3>先定义清楚，再允许计算</h3>
-                      <p>系统不会根据字段名猜业务口径。补齐统计对象、公式、范围和风险确认后，才能生成指标合同。</p>
+                      <p>系统先给出可修改的计算草案。请核对统计对象、计算方式和数据范围；不确定时可以修改或停止，确认后再执行。</p>
                     </div>
                     <div className="contract-progress" aria-label="口径确认步骤">
                       <span className="done">1 数据</span><span className="done">2 质量</span><span className="active">3 口径</span>

@@ -98,6 +98,7 @@ const result = await evaluate(`(async () => {
 
   clickByText('.metric-type-grid button', '比例指标');
   await new Promise((resolve) => setTimeout(resolve, 50));
+  setText('metricName', '订单送达率');
   clickByText('.contract-submit-row button', '生成并确认');
   await new Promise((resolve) => setTimeout(resolve, 50));
   const ratioBlockedMessage = document.querySelector('.contract-errors')?.textContent ?? '';
