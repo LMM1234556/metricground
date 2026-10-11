@@ -3,9 +3,11 @@ import WebSocket from "ws";
 import path from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
 import { verifyEvidencePackage } from "../app/lib/evidence-package.ts";
+const syntheticCloud = process.argv.includes("--synthetic-model");
 
 // Dedicated localhost test browser only. The question is routed by policy;
-// this test neither configures a provider nor sends a cloud-model request.
+// Optional synthetic metadata exercises cloud-decision persistence without
+// configuring a provider or sending any cloud-model request.
 const targets = await fetch("http://127.0.0.1:9224/json/list").then((response) => response.json());
 const target = targets.find((item) => item.url === "http://localhost:5173/");
 assert(target, "Dedicated MetricGround regression browser not found");
@@ -53,7 +55,19 @@ try {
     window.fetch = async function(input, init) {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
       if (url.includes('/api/task-runs') && init?.method === 'PUT') window.__evidenceRun = JSON.parse(init.body);
-      return fetchOriginal.call(this, input, init);
+      const response = await fetchOriginal.call(this, input, init);
+      if (${syntheticCloud} && url.includes('/api/agent/plan') && response.ok) {
+        const body = await response.json();
+        if (body.source !== 'policy-router') throw new Error('Synthetic test must use local policy route');
+        return Response.json({ ...body, source: 'cloud-agent', provider: 'dashscope', model: 'synthetic-browser-mock',
+          modelDecision: { analysisType: 'group_compare', entityField: '', valueField: '', groupField: 'region', timeField: '' },
+          planAdjustments: [
+            { stage: 'compile', field: 'entityField', before: '', after: body.plan.fieldBindings.entityField },
+            { stage: 'compile', field: 'valueField', before: '', after: body.plan.fieldBindings.valueField },
+            { stage: 'compile', field: 'timeField', before: '', after: null },
+          ], stepsExecuted: 2, attempts: 1, usage: { inputTokens: 10, outputTokens: 5 } });
+      }
+      return response;
     };
     const createOriginal = URL.createObjectURL.bind(URL);
     URL.createObjectURL = function(blob) {
@@ -126,7 +140,7 @@ try {
   assert(jsonFile && markdownFile, "Both download paths must produce actual contents");
   const evidence = JSON.parse(jsonFile.content);
   const verification = evidence.toolCalls.find((call) => call.tool === "validate_result").input;
-  assert.equal(evidence.version, "1.2");
+  assert.equal(evidence.version, "1.3");
   assert.equal(verifyEvidencePackage(evidence), true);
   const reportChecksum = markdownFile.content.match(/完整性校验：fnv1a32-pair-v1 \/ ([0-9a-f]{16})/)?.[1];
   assert.equal(reportChecksum, evidence.integrity.checksum, "报告与审计 JSON 必须共享同一证据快照校验和");
@@ -137,7 +151,17 @@ try {
   assert.equal(evidence.analysisSpec.aggregation, "sum");
   assert.equal(evidence.analysisSpec.valueField, "item_sales");
   assert.equal(evidence.analysisSpec.groupBy[0].field, "region");
-  assert.equal(evidence.planningEvidence.source, "policy-router");
+  assert.equal(evidence.planningEvidence.source, syntheticCloud ? "cloud-agent" : "policy-router");
+  if (syntheticCloud) {
+    assert.equal(evidence.planningEvidence.model, "synthetic-browser-mock");
+    assert.equal(evidence.planningEvidence.modelDecision.valueField, "");
+    assert.equal(evidence.planningEvidence.modelDecision.entityField, "");
+    assert(evidence.planningEvidence.planAdjustments.some(change => change.field === "valueField" && change.before === "" && change.after === "item_sales"));
+    assert(markdownFile.content.includes("compile / valueField"));
+  } else {
+    assert.equal(evidence.planningEvidence.modelDecision, null);
+    assert.equal(evidence.planningEvidence.planAdjustments, null);
+  }
   assert.equal(evidence.planningEvidence.proposal.analysisType, "group_compare");
   assert.deepEqual(evidence.planningEvidence.proposal.fieldBindings, {
     entityField: "order_id", valueField: "item_sales", groupField: "region", timeField: null,
@@ -170,10 +194,10 @@ try {
   })()`);
   assert(restored.includes(evidence.task.id.slice(0, 18)));
   assert.deepEqual(errors, []);
-  const destination = path.resolve("../runtime/evidence-v0.3.6");
+  const destination = path.resolve(syntheticCloud ? "../runtime/evidence-v0.3.9-synthetic" : "../runtime/evidence-v0.3.9-policy");
   await mkdir(destination, { recursive: true });
   for (const file of result.downloads) await writeFile(path.join(destination, path.basename(file.name)), file.content);
-  const summary = { taskId: evidence.task.id, verifiedChecksum: evidence.integrity.checksum, sqlLength: verification.sql.length, modelSource: evidence.planningEvidence.source, riskCount: evidence.qualityEvidence.issues.length, datasetVersion: evidence.datasets[0].versionId, groups: evidence.resultEvidence.groups, persistenceAndReload: true, downloads: result.downloads.map((file) => file.name), runtimeErrors: errors };
+  const summary = { taskId: evidence.task.id, verifiedChecksum: evidence.integrity.checksum, sqlLength: verification.sql.length, modelSource: evidence.planningEvidence.source, scope: syntheticCloud ? "Synthetic model metadata, no real provider calls" : "Policy route, no real provider calls", riskCount: evidence.qualityEvidence.issues.length, datasetVersion: evidence.datasets[0].versionId, groups: evidence.resultEvidence.groups, persistenceAndReload: true, downloads: result.downloads.map((file) => file.name), runtimeErrors: errors };
   await writeFile(path.join(destination, "verification-summary.json"), JSON.stringify(summary, null, 2) + "\n");
   console.log(JSON.stringify(summary, null, 2));
 } finally {

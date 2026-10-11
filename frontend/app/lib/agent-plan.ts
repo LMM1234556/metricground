@@ -128,6 +128,25 @@ export type AgentPlanResponse = {
   usage?: { inputTokens: number | null; outputTokens: number | null };
   latencyMs: number;
   fallbackReason?: string;
+  modelDecision?: ModelPlanningDecision | null;
+  planAdjustments?: PlanAdjustment[] | null;
+};
+
+// Structured submitAnalysisPlan arguments after tool-schema validation, before
+// plan compilation, field defaults or safety policies. This is not raw HTTP text.
+export type ModelPlanningDecision = {
+  analysisType: AgentAnalysisType;
+  entityField: string;
+  valueField: string;
+  groupField: string;
+  timeField: string;
+};
+
+export type PlanAdjustment = {
+  stage: "compile" | "policy" | "field-validation";
+  field: string;
+  before: string | number | null | string[];
+  after: string | number | null | string[];
 };
 
 export function createDatasetAgentContext(profile: DatasetProfile): DatasetAgentContext {

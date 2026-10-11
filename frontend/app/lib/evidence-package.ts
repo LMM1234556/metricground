@@ -2,7 +2,7 @@ import type { TaskRun } from "./task-run";
 
 export type EvidencePackage = {
   format: "metricground-evidence";
-  version: "1.0" | "1.1" | "1.2";
+  version: "1.0" | "1.1" | "1.2" | "1.3";
   exportedAt: string;
   integrity: { algorithm: "fnv1a32-pair-v1"; checksum: string };
   task: {
@@ -116,7 +116,7 @@ export function buildEvidencePackage(run: TaskRun, exportedAt = new Date().toISO
   const snapshotAt = completedAt ?? exportedAt;
   const withoutIntegrity = {
     format: "metricground-evidence" as const,
-    version: "1.2" as const,
+    version: "1.3" as const,
     exportedAt: snapshotAt,
     task: { id: evidenceRun.id, question: evidenceRun.question, state: evidenceRun.state, createdAt: evidenceRun.createdAt, updatedAt: evidenceRun.updatedAt },
     datasets: evidenceRun.datasetVersions,
@@ -142,7 +142,7 @@ export function buildEvidencePackage(run: TaskRun, exportedAt = new Date().toISO
     events: evidenceRun.events,
     privacy: {
       rawRowsIncluded: false as const,
-      statement: "证据包包含数据版本、人工确认前候选计划、最终结构化口径、聚合结果、质量风险与判断、规划来源、工具摘要和复核 SQL，不包含 Excel/CSV 原始数据行。候选字段、筛选参数与分组名称可能包含业务信息，请确认后分享。",
+      statement: "证据包包含数据版本、模型提交的结构化决策（如已记录）、程序调整、人工确认前系统候选计划、最终结构化口径、聚合结果、质量风险与判断、规划来源、工具摘要和复核 SQL，不包含 Excel/CSV 原始数据行。候选字段、筛选参数与分组名称可能包含业务信息，请确认后分享。",
     },
   };
   return {
@@ -221,9 +221,26 @@ function renderPlanning(evidence: EvidencePackage) {
     `- 工具规划步骤：${planning.stepsExecuted}；尝试次数：${planning.attempts ?? "未记录"}；规划耗时：${planning.latencyMs} ms`,
     `- Token 用量：输入 ${planning.usage?.inputTokens ?? "未记录"}，输出 ${planning.usage?.outputTokens ?? "未记录"}`,
     "- 范围说明：模型/规则只生成候选分析计划，最终计算使用人工批准的结构化口径和确定性引擎；规划用量不是费用账单，也不包含未记录的失败请求。",
+    "- 候选计划中的置信度为程序设置的提示值，不是模型准确率或经校准的概率。",
+    "",
+    "### 模型提交的结构化决策与程序调整",
+    "",
+    ...(planning.modelDecision ? [
+      "以下为 submitAnalysisPlan 工具收到并通过参数校验的模型决策，捕获于字段补齐和策略处理之前；缺省字段可能由工具参数模式补为空字符串。此记录不包含原始 HTTP 响应或模型思考过程。",
+      "",
+      codeBlock(JSON.stringify(planning.modelDecision, null, 2)),
+      "",
+      ...(planning.planAdjustments ? [
+        planning.planAdjustments.length ? "程序调整（按执行阶段排序）：" : "分析类型和字段绑定保持一致；完整步骤、文案与执行权限仍由程序生成。",
+        ...planning.planAdjustments.map(change => `- ${change.stage} / ${change.field}：${JSON.stringify(change.before)} → ${JSON.stringify(change.after)}`),
+      ] : ["未保存程序调整记录；不能假定未发生调整。"]),
+    ] : [(planning.source === "cloud-agent" || planning.source === "ollama-agent")
+      ? "历史任务未保存模型提交的结构化决策；现有候选计划不能证明哪些字段由模型选择、哪些由程序补齐。"
+      : "本任务由规则路由或规则兜底生成候选计划，没有已记录的模型提交决策。"]),
     "",
     "### 人工确认前的候选计划",
     "",
+    "以下是程序编译、策略约束和字段校验后的系统候选计划，与模型提交决策和最终人工口径分别保存。",
     ...(proposal ? [
       `- 分析类型：${proposal.analysisType}；动作：${proposal.action}；置信度：${proposal.confidence}`,
       `- 候选字段：统计对象 ${proposal.fieldBindings.entityField ?? "未绑定"}；数值 ${proposal.fieldBindings.valueField ?? "未绑定"}；分组 ${proposal.fieldBindings.groupField ?? "未绑定"}；时间 ${proposal.fieldBindings.timeField ?? "未绑定"}`,

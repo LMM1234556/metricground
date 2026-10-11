@@ -9,6 +9,7 @@ import { getAgentProviderCandidates } from "../../../lib/model-provider";
 import { createBudgetedModelFetch, ModelCostPolicyError } from "../../../lib/model-cost-policy";
 import { createModelBudgetStore } from "../../../lib/model-budget.server";
 import { createIntentPlanningAgent, decisionInputSchema } from "../../../lib/intent-planning-agent";
+import { compileModelPlan } from "../../../lib/model-plan-provenance";
 import { apiJson, guardApiRequest, readJsonBody } from "../../../lib/api-guard.server";
 
 const contextSchema = z.object({
@@ -282,6 +283,7 @@ export async function POST(request: Request) {
     });
   }
   let submittedPlan: AgentPlan | null = null;
+  let provenance: ReturnType<typeof compileModelPlan> | null = null;
   const providerErrors: string[] = [];
   for (const provider of getAgentProviderCandidates(process.env)) {
     try {
@@ -291,21 +293,28 @@ export async function POST(request: Request) {
       ...(isCloud ? { fetch: createBudgetedModelFetch({ provider, ...createModelBudgetStore(context.requestId, provider) }) } : {}),
     });
     const agent = createIntentPlanningAgent(compatible.chatModel(provider.model), dataset, (input) => {
-      const candidate = planFromDecision(input, question, dataset);
-      submittedPlan = validatePlanFields(enforcePolicyGuards(candidate, question), dataset);
+      provenance = compileModelPlan(input,
+        decision => planFromDecision(decision, question, dataset),
+        candidate => enforcePolicyGuards(candidate, question),
+        candidate => validatePlanFields(candidate, dataset));
+      submittedPlan = provenance.plan;
       return { accepted: true, action: submittedPlan.action };
     });
     let lastError: unknown;
     for (let attempt = 1; attempt <= (isCloud ? 1 : 2); attempt += 1) {
       submittedPlan = null;
+      provenance = null;
       try {
         const result = await agent.generate({
           prompt: attempt === 1 ? question : `${question}\n只调用规定工具提交分析决策，不输出解释文本。`,
           abortSignal: AbortSignal.timeout(45_000),
         });
-        if (!submittedPlan) throw new Error("Agent did not submit a plan");
+        if (!submittedPlan || !provenance) throw new Error("Agent did not submit a plan");
+        const captured = provenance as ReturnType<typeof compileModelPlan>;
         return apiJson(context, {
           plan: submittedPlan,
+          modelDecision: captured.modelDecision,
+          planAdjustments: captured.planAdjustments,
           source: provider.kind === "local" ? "ollama-agent" : "cloud-agent",
           provider: provider.id,
           model: provider.model,

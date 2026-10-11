@@ -1,4 +1,4 @@
-import type { AgentPlan, AgentPlanResponse } from "./agent-plan";
+import type { AgentPlan, AgentPlanResponse, ModelPlanningDecision, PlanAdjustment } from "./agent-plan";
 import { createDatasetVersion } from "./analysis-spec.ts";
 import type { DatasetProfile, QualityIssue } from "./tabular-profile";
 import type { TaskRun } from "./task-run";
@@ -13,9 +13,11 @@ export type PlanningEvidence = {
   latencyMs: number;
   usage: { inputTokens: number | null; outputTokens: number | null } | null;
   // Optional for TaskRuns created before v0.3.8. New runs retain the exact
-  // pre-approval proposal so reviewers can distinguish model suggestions from
+  // pre-approval system proposal (compiled and guarded) to distinguish it from
   // the final human-confirmed AnalysisSpec.
   proposal?: AgentPlan | null;
+  modelDecision?: ModelPlanningDecision | null;
+  planAdjustments?: PlanAdjustment[] | null;
 };
 
 export type QualityEvidence = {
@@ -48,6 +50,8 @@ export function capturePlanningEvidence(response: AgentPlanResponse, capturedAt:
     capturedAt, source: response.source, provider: response.provider ?? null, model: response.model,
     stepsExecuted: response.stepsExecuted, attempts: response.attempts ?? null, latencyMs: response.latencyMs,
     usage: response.usage ? { inputTokens: response.usage.inputTokens, outputTokens: response.usage.outputTokens } : null,
+    modelDecision: response.modelDecision ? structuredClone(response.modelDecision) : null,
+    planAdjustments: response.modelDecision && response.planAdjustments ? structuredClone(response.planAdjustments) : null,
     proposal: {
       ...response.plan,
       tools: [...response.plan.tools],

@@ -51,7 +51,7 @@ assert.deepEqual(evidenceAfterSecondExport, evidence, "报告和审计 JSON 必�
 assert(markdown.includes("证据快照时间：2026-09-20T00:00:03.000Z"));
 assert(markdown.includes("结果有限且行数勾稽通过"));
 assert(markdown.includes("不包含 Excel/CSV 原始数据行"));
-assert.equal(evidence.version, "1.2");
+assert.equal(evidence.version, "1.3");
 const verification = evidence.toolCalls.find((call) => call.tool === "validate_result").input;
 assert.equal(verification.sql, fullSql, "复核 SQL 不得截断");
 assert.deepEqual(verification.parameters, parameters, "绑定参数不得截断");
@@ -69,16 +69,28 @@ assert(markdown.includes("人工确认前的候选计划") && markdown.includes(
 assert.equal(evidence.resultEvidence.groups[0].value, 100);
 
 const cloudPlan = structuredClone(plan);
+const originalDecision = { analysisType: "group_compare", entityField: "", valueField: "", groupField: "region", timeField: "" };
+const adjustments = [{ stage: "compile", field: "valueField", before: "", after: "amount" }];
 const cloudRun = createTaskRunFromPlan(profile, "模拟规划记录", {
   plan: cloudPlan, source: "cloud-agent", provider: "dashscope", model: "qwen-plus", stepsExecuted: 2, attempts: 1, latencyMs: 123,
   usage: { inputTokens: 100, outputTokens: 50 },
+  modelDecision: originalDecision, planAdjustments: adjustments,
 }, { now: "2026-09-20T00:00:00.000Z" });
 cloudPlan.analysisType = "top_n";
 cloudPlan.fieldBindings.valueField = "mutated-after-capture";
+originalDecision.valueField = "mutated";
+adjustments[0].after = "mutated";
 const cloudEvidence = buildEvidencePackage(cloudRun);
 assert.deepEqual(cloudEvidence.planningEvidence.usage, { inputTokens: 100, outputTokens: 50 });
 assert.equal(cloudEvidence.planningEvidence.proposal.analysisType, "group_compare", "候选计划必须在 TaskRun 创建时冻结");
-assert.equal(cloudEvidence.planningEvidence.proposal.fieldBindings.valueField, "amount", "后续 UI 修改不能改写模型原始字段选择");
+assert.equal(cloudEvidence.planningEvidence.proposal.fieldBindings.valueField, "amount", "后续 UI 修改不能改写系统候选字段");
+assert.equal(cloudEvidence.planningEvidence.modelDecision.valueField, "", "程序补齐不能倒写模型未绑定的字段");
+assert.equal(cloudEvidence.planningEvidence.planAdjustments[0].after, "amount");
+assert(evidenceAsMarkdown(cloudEvidence).includes("模型提交的结构化决策与程序调整"));
+const legacyCloud = structuredClone(cloudRun);
+delete legacyCloud.planningEvidence.modelDecision;
+delete legacyCloud.planningEvidence.planAdjustments;
+assert(evidenceAsMarkdown(buildEvidencePackage(legacyCloud)).includes("历史任务未保存模型提交的结构化决策"));
 assert(evidenceAsMarkdown(cloudEvidence).includes("dashscope") && evidenceAsMarkdown(cloudEvidence).includes("qwen-plus"));
 
 const riskyProfile = profileRows([
@@ -116,4 +128,4 @@ const tampered = structuredClone(evidence);
 tampered.resultSummary = "被篡改";
 assert.equal(verifyEvidencePackage(tampered), false);
 
-console.log(JSON.stringify({ suite: "evidence-v1.2", fullSqlLength: fullSql.length, checksum: evidence.integrity.checksum, tools: evidence.toolCalls.map((call) => call.tool), rawRowsIncluded: evidence.privacy.rawRowsIncluded }, null, 2));
+console.log(JSON.stringify({ suite: "evidence-v1.3", fullSqlLength: fullSql.length, checksum: evidence.integrity.checksum, tools: evidence.toolCalls.map((call) => call.tool), rawRowsIncluded: evidence.privacy.rawRowsIncluded }, null, 2));
