@@ -7,6 +7,7 @@ import { createDatasetVersion } from "./analysis-spec.ts";
 import { createTaskRunFromPlan } from "./agent-runtime.ts";
 
 export function analysisConfirmationView(plan: AgentPlan | null, question = "") {
+  if (plan?.analysisType === "join") return "多表关联" as const;
   if (plan && ["group_compare", "trend", "top_n"].includes(plan.analysisType)) return "经营分析" as const;
   if (/(?:比较|对比).{0,12}(?:地区|区域|渠道|品类)|按.{0,10}(?:分组|月|周|季度)/i.test(question)) return "经营分析" as const;
   return "指标口径" as const;

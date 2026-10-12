@@ -2,10 +2,16 @@ import {
   inferStrongAnalysisType, isDistinctCountQuestion, keepRelevantFieldBindings,
   type AgentPlan,
 } from "./agent-plan.ts";
+import { isRatioQuestion } from "./analysis-goal-guard.ts";
 
 // Safety and clarification preserve the identified task; they never promote an
 // unsupported task or change a ranking/trend into a scalar amount calculation.
 export function enforcePolicyGuards(plan: AgentPlan, question: string): AgentPlan {
+  if (isRatioQuestion(question) && ["group_compare", "trend", "top_n"].includes(plan.analysisType)) {
+    return { ...plan, action: "unsupported", summary: "已识别分组比例需求，但当前版本尚不支持。",
+      clarification: "成功率/比例需要逐组定义分子和分母，当前不能用金额合计、计数或平均值替代。此任务不会执行，也不会标记计算完成。",
+      tools: ["profile_dataset"], steps: ["说明分组比例能力限制", "保留原问题，不执行替代计算"], nextView: null };
+  }
   if (inferStrongAnalysisType(question) === "unsupported" || plan.analysisType === "unsupported") {
     return {
       ...plan,

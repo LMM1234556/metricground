@@ -21,6 +21,7 @@ const TOOL_LABELS = {
   execute_trend: "时间趋势",
   execute_top_n: "Top N 排名",
   validate_result: "结果验证",
+  request_join: "关联确认向导",
 };
 
 export default function AgentPlanCard({ response, loading, completed = false, resultSummary, onNavigate }: Props) {

@@ -28,6 +28,7 @@ const contextSchema = z.object({
     title: z.string().max(300), severity: z.string().max(10), check: z.string().max(30),
   })).max(200),
   availableTools: z.array(z.enum(AGENT_TOOLS)).max(AGENT_TOOLS.length),
+  relatedTables: z.array(z.object({ fileName: z.string().max(240), rowCount: z.number().int().positive(), fields: z.array(z.string().max(160)).max(200) })).max(2).optional(),
 });
 
 function firstMatchingField(context: DatasetAgentContext, pattern: RegExp) {
@@ -109,6 +110,13 @@ function fallbackPlan(question: string, context: DatasetAgentContext): AgentPlan
   if (intent === "profile") return {
     ...base, action: "ready", analysisType: "profile", summary: `先查看 ${context.fileName} 的字段画像与候选粒度。`,
     clarification: null, tools: ["profile_dataset"], steps: ["读取行列规模与字段类型", "查看缺失率、唯一值和候选粒度"], nextView: "画像",
+  };
+  if (intent === "join") return {
+    ...base, action: "clarify", analysisType: "join", summary: "已识别补充字段/多表关联需求，请进入受控关联向导。",
+    clarification: context.relatedTables?.length
+      ? "已添加关联表。请确认主表、关联键、关系类型和未匹配处理，并核对行数与金额对账；Agent 不会自动执行关联。"
+      : "请先添加需要补充字段的关联表，再确认关联键和输出粒度；不能仅凭主表推断商品品类。",
+    tools: ["profile_dataset", "request_join"], steps: ["核对主表与关联表画像", "人工确认关联键和输出粒度", "在多表关联向导预览行数及金额对账"], nextView: "多表关联",
   };
   if (isJoinAmountRiskQuestion(question)) return {
     ...base, action: "clarify", analysisType: "quality", summary: "已识别关联后的金额放大风险，需要核对关联粒度和来源行对账。",
@@ -218,6 +226,7 @@ function planFromDecision(input: z.infer<typeof decisionInputSchema>, question: 
     group_compare: "各地区分组比较",
     trend: "月度趋势",
     top_n: "排名前五",
+    join: "多表关联",
     unsupported: "预测模型",
   };
   const base = fallbackPlan(analysisType === "metric" || isJoinAmountRiskQuestion(question) || isRowCountDifferenceQuestion(question) ? question : intentPrompt[analysisType], context);

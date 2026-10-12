@@ -1,0 +1,57 @@
+import assert from "node:assert/strict";
+import { profileRows } from "../app/lib/tabular-profile.ts";
+import { analysisGoalErrors, requestsOriginalScope } from "../app/lib/analysis-goal-guard.ts";
+import { inferStrongAnalysisType, createDatasetAgentContext } from "../app/lib/agent-plan.ts";
+import { enforcePolicyGuards } from "../app/lib/agent-plan-policy.ts";
+import { createTaskRunFromPlan, approveTaskRun, startTaskTool } from "../app/lib/agent-runtime.ts";
+import { createDataScopeEvidence } from "../app/lib/analysis-handoff.ts";
+import { applyCleaningPlan } from "../app/lib/data-cleaning.ts";
+import { createBusinessAnalysisConfig, buildBusinessAnalysisPlan, executeBusinessAnalysis } from "../app/lib/business-analysis.ts";
+import { analysisSpecFromBusinessConfig } from "../app/lib/analysis-spec.ts";
+import { buildEvidencePackage, verifyEvidencePackage } from "../app/lib/evidence-package.ts";
+
+const profile = profileRows([["order_id", "customer_id", "amount", "region", "status"],
+  ["A", "C1", 100, "East", "delivered"], ["A", "C1", 100, "East", "delivered"],
+  ["B", null, 200, "South", "cancelled"], ["C", "C3", 300, "North", "delivered"]],
+  { fileName: "goals.csv", fileSize: 150, fileType: "CSV", activeSheet: "CSV 数据", sheetNames: ["CSV 数据"] });
+const config = { analysisType: "group_compare", aggregation: "sum", entityField: "order_id", valueField: "amount", groupField: "region", timeField: "", timeGrain: "month", limit: 5, sortDirection: "desc" };
+const plan = { analysisType: "group_compare", action: "clarify", summary: "确认地区指标", clarification: "请选择具体指标", confidence: .75,
+  tools: ["profile_dataset", "execute_group_compare"], steps: ["确认地区指标"], fieldBindings: { entityField: "order_id", valueField: "amount", groupField: "region", timeField: null }, limitations: [], nextView: "经营分析" };
+const rateQuestion = "比较不同地区的送货成功率";
+assert.equal(enforcePolicyGuards(plan, rateQuestion).action, "unsupported");
+assert.equal(buildBusinessAnalysisPlan(profile, config, rateQuestion).ready, false);
+assert.throws(() => executeBusinessAnalysis(profile, config, rateQuestion), /比例/);
+const rateRun = createTaskRunFromPlan(profile, rateQuestion, { plan, source: "policy-router", model: null, stepsExecuted: 0, latencyMs: 0 });
+assert.throws(() => approveTaskRun(rateRun, { type: "metric", statement: "误选求和", spec: analysisSpecFromBusinessConfig(config, profile, rateQuestion) }), /比例/);
+const countQuestion = "原始文件所有状态下有多少笔不同订单，并判断哪些数据问题会影响这个答案。";
+assert(requestsOriginalScope(countQuestion));
+const wrongGroup = { ...config, aggregation: "count_distinct", groupField: "customer_id" };
+assert.equal(buildBusinessAnalysisPlan(profile, wrongGroup, countQuestion).ready, false);
+assert.equal(analysisGoalErrors("按订单状态分组统计不同订单数量", { analysisType: "group_compare", aggregation: "count_distinct", entityField: "order_id", groupBy: [{ table: "primary", field: "status" }] }).length, 0);
+assert(analysisGoalErrors(rateQuestion, { analysisType: "group_compare", aggregation: "sum", entityField: "status", groupBy: [{ table: "primary", field: "region" }] }).some(error => error.includes("状态类别")));
+const cleaned = applyCleaningPlan(profile, profile.qualityIssues.filter(issue => issue.supportedRepair).map(issue => issue.id));
+const scopedRun = createTaskRunFromPlan(cleaned.cleanedProfile, countQuestion, { plan, source: "policy-router", model: null, stepsExecuted: 0, latencyMs: 0 });
+scopedRun.dataScopeEvidence = createDataScopeEvidence(profile, cleaned.cleanedProfile, cleaned.receipt, "order_id", "original-task");
+scopedRun.dataScopeEvidence.confirmedAt = new Date().toISOString();
+assert.throws(() => approveTaskRun(scopedRun, { type: "metric", statement: "只勾选不能改变明确原始范围" }), /原始数据范围/);
+const validQuestion = "比较不同地区的金额，包含退款";
+let validRun = createTaskRunFromPlan(profile, validQuestion, { plan, source: "policy-router", model: null, stepsExecuted: 0, latencyMs: 0 });
+validRun = approveTaskRun(validRun, { type: "metric", statement: "确认金额", spec: analysisSpecFromBusinessConfig(config, profile, validQuestion) });
+assert.equal(validRun.state, "READY_TO_EXECUTE");
+assert.throws(() => approveTaskRun(rateRun, { type: "metric", statement: "不能覆盖原问题", spec: validRun.analysisSpec }), /保留当前任务原问题/);
+assert.throws(() => startTaskTool({ ...validRun, analysisSpec: { ...validRun.analysisSpec, question: rateQuestion } }, "execute_group_compare", {}), /保留当前任务原问题/);
+assert.throws(() => startTaskTool({ ...validRun, question: rateQuestion, analysisSpec: { ...validRun.analysisSpec, question: rateQuestion } }, "execute_group_compare", {}), /比例/);
+assert.equal(executeBusinessAnalysis(profile, config, validQuestion).rows.length, 3);
+const joinQuestion = "商品品类补到订单信息";
+assert.equal(inferStrongAnalysisType(joinQuestion), "join");
+const related = profileRows([["order_id", "category"], ["A", "X"]], { fileName: "items.csv", fileSize: 20, fileType: "CSV", activeSheet: "CSV 数据", sheetNames: ["CSV 数据"] });
+const context = createDatasetAgentContext(profile, [related]);
+assert.equal(context.relatedTables.length, 1);
+assert(!JSON.stringify(context).includes('"records"'));
+const joinPlan = { ...plan, analysisType: "join", tools: ["profile_dataset", "request_join"], nextView: "多表关联" };
+const joinRun = createTaskRunFromPlan(profile, joinQuestion, { plan: joinPlan, source: "policy-router", model: null, stepsExecuted: 0, latencyMs: 0 }, { relatedProfiles: [related] });
+assert.equal(joinRun.state, "NEEDS_CLARIFICATION");
+assert.equal(joinRun.datasetVersions.length, 2);
+assert.equal(joinRun.resultEvidence, undefined);
+assert(verifyEvidencePackage(buildEvidencePackage(joinRun)));
+console.log(JSON.stringify({ suite: "goal-safety-v0.3.11", rateCannotBecomeMoney: true, originalScopeProtected: true, scalarCannotBecomeCustomerGroups: true, joinHandoffNotCompletion: true, cloudCalls: 0 }, null, 2));

@@ -2,6 +2,7 @@ import type { BusinessAnalysisConfig } from "./business-analysis";
 import type { MetricContract } from "./metric-contract";
 import type { FilterRule } from "./metric-execution";
 import type { CellValue, DatasetProfile } from "./tabular-profile";
+import { analysisGoalErrors } from "./analysis-goal-guard.ts";
 
 export type AnalysisType = "count" | "sum" | "average" | "ratio" | "group_compare" | "trend" | "top_n";
 export type AnalysisAggregation = "count_distinct" | "sum" | "average" | "ratio";
@@ -232,6 +233,7 @@ export function validateAnalysisSpec(spec: AnalysisSpec, versions: DatasetVersio
   if (["sum", "average"].includes(spec.aggregation) && !spec.amountScope) warnings.push("尚未说明金额或数值字段的业务范围");
   if (spec.unresolvedQuestions.length > 0) errors.push(`仍有 ${spec.unresolvedQuestions.length} 个待确认问题`);
   if (spec.status !== "confirmed") errors.push("AnalysisSpec 尚未完成人工确认");
+  errors.push(...analysisGoalErrors(spec.question, spec));
 
   return { valid: errors.length === 0, errors, warnings };
 }

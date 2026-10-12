@@ -1,6 +1,7 @@
 import type { AgentPlanResponse, AgentToolName } from "./agent-plan";
 import type { AnalysisSpec } from "./analysis-spec";
 import { createDatasetVersion, validateAnalysisSpec } from "./analysis-spec.ts";
+import { requestsOriginalScope } from "./analysis-goal-guard.ts";
 import type { DatasetProfile } from "./tabular-profile";
 import { capturePlanningEvidence, captureQualityEvidence, type ResultEvidence } from "./task-evidence.ts";
 import {
@@ -36,10 +37,10 @@ export function createTaskRunFromPlan(
   profile: DatasetProfile,
   question: string,
   response: AgentPlanResponse,
-  options: { id?: string; now?: string; qualityDecisions?: Record<string, "approved" | "kept"> } = {},
+  options: { id?: string; now?: string; qualityDecisions?: Record<string, "approved" | "kept">; relatedProfiles?: DatasetProfile[] } = {},
 ) {
   const version = createDatasetVersion(profile);
-  let run = createTaskRun({ id: options.id, question, datasetVersions: [version], now: options.now });
+  let run = createTaskRun({ id: options.id, question, datasetVersions: [version, ...(response.plan.analysisType === "join" ? (options.relatedProfiles ?? []).map(createDatasetVersion) : [])], now: options.now });
   run = {
     ...run,
     planningEvidence: capturePlanningEvidence(response, run.createdAt),
@@ -72,11 +73,15 @@ export function approveTaskRun(
   run: TaskRun,
   input: { type: ApprovalType; statement: string; spec?: AnalysisSpec; now?: string },
 ) {
+  if (run.dataScopeEvidence && requestsOriginalScope(run.question)) {
+    throw new Error("原问题要求原始数据范围，不能仅勾选清洗范围后继续。请恢复原始数据，或开始新的分析明确使用清洗副本。");
+  }
   if (run.dataScopeEvidence && !run.dataScopeEvidence.confirmedAt) throw new Error("清洗后的分析范围尚未确认，不能批准执行。");
   if (input.spec && run.dataScopeEvidence && input.spec.sources.find(source => source.role === "primary")?.versionId !== run.dataScopeEvidence.derived.versionId) {
     throw new Error("执行口径与已确认的清洗数据版本不一致。");
   }
   if (input.spec) {
+    if (input.spec.question !== run.question) throw new Error("执行口径必须保留当前任务原问题；改变目标需要开始新的分析。");
     const validation = validateAnalysisSpec(input.spec, run.datasetVersions);
     if (!validation.valid) throw new Error(`AnalysisSpec 未通过校验：${validation.errors.join("；")}`);
   }
@@ -106,6 +111,11 @@ export function startTaskTool(
   options: { now?: string; callId?: string } = {},
 ) {
   if (run.state !== "READY_TO_EXECUTE") throw new Error(`当前任务尚未获准执行：${run.state}`);
+  if (run.analysisSpec) {
+    if (run.analysisSpec.question !== run.question) throw new Error("执行口径必须保留当前任务原问题。");
+    const validation = validateAnalysisSpec(run.analysisSpec, run.datasetVersions);
+    if (!validation.valid) throw new Error(`执行口径与原问题不一致：${validation.errors.join("；")}`);
+  }
   const executing = transitionTaskRun(run, "EXECUTING", `调用确定性工具 ${tool}`, options.now);
   return startToolCall(executing, tool, input, { id: options.callId, now: options.now });
 }
@@ -123,6 +133,11 @@ export function completeTaskTool(
   },
 ) {
   if (run.state !== "EXECUTING") throw new Error(`当前任务不在执行状态：${run.state}`);
+  if (run.analysisSpec) {
+    if (run.analysisSpec.question !== run.question) throw new Error("执行口径必须保留当前任务原问题。");
+    const validation = validateAnalysisSpec(run.analysisSpec, run.datasetVersions);
+    if (!validation.valid) throw new Error(`不能将偏离原问题的任务标记完成：${validation.errors.join("；")}`);
+  }
   let next = succeedToolCall(run, input.callId, input.outputSummary, input.now);
   if (input.resultEvidence) next = { ...next, resultEvidence: input.resultEvidence };
   next = transitionTaskRun(next, "VALIDATING", "工具执行完成，开始基础校验与 DuckDB 独立复核", input.now);

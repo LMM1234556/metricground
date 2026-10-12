@@ -28,7 +28,7 @@ assert.equal(run.approvals.length, 1);
 const clarifyPlan = { ...basePlan, action: "clarify", clarification: "确认金额字段", tools: ["profile_dataset", "run_quality_checks", "execute_group_compare", "validate_result"] };
 let clarified = createTaskRunFromPlan(profile, "比较各地区销售表现", { plan: clarifyPlan, source: "policy-router", model: null, stepsExecuted: 0, latencyMs: 1 }, { id: "runtime-clarify" });
 assert.equal(clarified.state, "NEEDS_CLARIFICATION");
-clarified = approveTaskRun(clarified, { type: "metric", statement: "销售表现定义为 amount 求和", spec });
+clarified = approveTaskRun(clarified, { type: "metric", statement: "销售表现定义为 amount 求和", spec: { ...spec, question: clarified.question } });
 assert.equal(clarified.state, "READY_TO_EXECUTE");
 
 const qualityPlan = { ...basePlan, action: "ready", analysisType: "quality", tools: ["profile_dataset", "run_quality_checks", "validate_result"], nextView: "质量检查" };

@@ -116,4 +116,16 @@ assert.equal(missingRankMeasure.analysisType, "top_n");
 assert.equal(missingRankMeasure.action, "clarify");
 assert.equal(missingRankMeasure.fieldBindings.valueField, null);
 
-console.log(JSON.stringify({ passed: true, cases: 15, source: "policy-router", scope: "实际 API 路由与字段绑定回归，不代表模型准确率" }, null, 2));
+const groupedRate = await plan("比较不同地区的送货成功率");
+assert.equal(groupedRate.action, "unsupported");
+assert(!groupedRate.tools.includes("execute_group_compare"));
+assert(groupedRate.clarification.includes("分子和分母"));
+const join = await plan("商品品类补到订单信息", { ...dataset, relatedTables: [{ fileName: "items.csv", rowCount: 4, fields: ["order_id", "category"] }] });
+assert.equal(join.analysisType, "join");
+assert.equal(join.action, "clarify");
+assert.equal(join.nextView, "多表关联");
+assert(join.tools.includes("request_join"));
+assert(join.clarification.includes("已添加关联表"));
+const missingJoinTable = await plan("商品品类补到订单信息");
+assert(missingJoinTable.clarification.includes("请先添加"));
+console.log(JSON.stringify({ passed: true, cases: 18, source: "policy-router", scope: "实际 API 路由与字段绑定回归，不代表模型准确率" }, null, 2));

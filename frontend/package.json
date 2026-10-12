@@ -1,6 +1,6 @@
 {
   "name": "metricground",
-  "version": "0.3.10",
+  "version": "0.3.11",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
@@ -32,6 +32,7 @@
     "test:agent:runtime": "node --experimental-strip-types scripts/verify-agent-runtime.mjs",
     "test:planning-provenance": "node --experimental-strip-types scripts/verify-planning-provenance.mjs",
     "test:analysis-handoff": "node --experimental-strip-types scripts/verify-analysis-handoff.mjs",
+    "test:goal-safety": "node --experimental-strip-types scripts/verify-analysis-goal-safety.mjs",
     "test:analysis-handoff:e2e": "npm run test:browser:reset && node --experimental-strip-types scripts/verify-analysis-handoff-ui.mjs",
     "test:evidence": "node --experimental-strip-types scripts/verify-evidence-package.mjs",
     "test:evidence:e2e": "npm run test:browser:reset && node --experimental-strip-types scripts/verify-evidence-download.mjs && npm run test:browser:reset && node --experimental-strip-types scripts/verify-evidence-download.mjs --synthetic-model",
@@ -53,7 +54,7 @@
     "test:alerting": "node scripts/verify-alert-policy.mjs",
     "test:browser:reset": "node scripts/reset-browser-workspace.mjs",
     "test:workbench": "npm run test:browser:reset && node scripts/evaluate-workbench.mjs",
-    "test:ci:static": "npm run lint && npm run typecheck && npm run build && npm run test:core && npm run test:intent && npm run test:upload-boundaries && npm run test:quality-impact && npm run test:analysis && npm run test:agent:foundation && npm run test:catalog && npm run test:join && npm run test:agent:runtime && npm run test:planning-provenance && npm run test:analysis-handoff && npm run test:evidence && npm run test:providers && npm run test:model-cost && npm run test:model-worker && npm run test:alerting",
+    "test:ci:static": "npm run lint && npm run typecheck && npm run build && npm run test:core && npm run test:intent && npm run test:upload-boundaries && npm run test:quality-impact && npm run test:analysis && npm run test:agent:foundation && npm run test:catalog && npm run test:join && npm run test:agent:runtime && npm run test:planning-provenance && npm run test:analysis-handoff && npm run test:goal-safety && npm run test:evidence && npm run test:providers && npm run test:model-cost && npm run test:model-worker && npm run test:alerting",
     "test:ci:browser": "npm run test:scenarios && npm run test:agent && npm run test:profile && npm run test:quality && npm run test:cleaning && npm run test:metric && npm run test:execution && npm run test:execution:mobile && npm run test:workbench && npm run test:release:browser && npm run test:recovery && npm run test:persistence && npm run test:anonymous-isolation && npm run test:d1:recovery",
     "test:release": "npm run lint && npm run typecheck && npm run build && npm run test:core && npm run test:profile && npm run test:quality && npm run test:quality-impact && npm run test:cleaning && npm run test:metric && npm run test:execution && npm run test:analysis && npm run test:agent:foundation && npm run test:catalog && npm run test:join && npm run test:agent:runtime && npm run test:evidence && npm run test:scenarios && npm run test:providers && npm run test:workbench",
     "test:release:browser": "npm run test:analysis:e2e && npm run test:evidence:e2e && npm run test:analysis-handoff:e2e && npm run test:guide:e2e && npm run test:join:e2e && npm run test:join:reconciliation && npm run test:join:three-table && npm run test:novice-files",

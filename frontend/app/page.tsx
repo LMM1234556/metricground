@@ -33,6 +33,7 @@ import { businessFieldLabel, fieldDisplayName, rawFieldName } from "./lib/field-
 import { assessQualityImpact, type QualityImpactSummary } from "./lib/quality-impact";
 import { clearWorkspaceSession, loadWorkspaceSession, saveWorkspaceSession } from "./lib/workspace-session";
 import { analysisConfirmationView, createDataScopeEvidence, rebindMetricDraft, rebindTaskAfterCleaning, type DataScopeEvidence } from "./lib/analysis-handoff";
+import { requestsOriginalScope, isRatioQuestion, analysisGoalErrors } from "./lib/analysis-goal-guard";
 
 const trendData = snapshot.monthly.map((row) => ({
   month: row.month.slice(2),
@@ -575,6 +576,9 @@ export default function Home() {
       setTaskRun({ ...restored, planningEvidence: { ...structuredClone(taskRun?.planningEvidence ?? restored.planningEvidence!),
         reusedFrom: { taskId: taskRun?.id ?? null, datasetVersionId: taskRun?.datasetVersions.at(-1)?.versionId ?? restored.datasetVersions[0].versionId, reason: "恢复原始数据后沿用原计划，未新增模型请求；审批需重新确认。" } } });
     } else setTaskRun(null);
+    setBusinessAnalysisPlan(null);
+    setEvidenceExport(null);
+    setAgentNavigationNotice("已恢复原始数据。旧审批与结果已清除，请重新确认质量和原问题的口径。");
     setProfileView("质量检查");
   }
 
@@ -688,12 +692,12 @@ export default function Home() {
         const response = await fetch("/api/agent/plan", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ question: normalized, dataset: createDatasetAgentContext(datasetProfile) }),
+          body: JSON.stringify({ question: normalized, dataset: createDatasetAgentContext(datasetProfile, relatedProfiles) }),
         });
         if (!response.ok) throw new Error("Agent planning failed");
         const planned = await response.json() as AgentPlanResponse;
         setAgentResponse(planned);
-        setTaskRun(createTaskRunFromPlan(datasetProfile, normalized, planned, { qualityDecisions }));
+        setTaskRun(createTaskRunFromPlan(datasetProfile, normalized, planned, { qualityDecisions, relatedProfiles }));
       } catch {
         const fallback: AgentPlanResponse = {
           plan: {
@@ -746,7 +750,7 @@ export default function Home() {
       const validField = (field: string | null) => field && datasetProfile.columns.some((column) => column.name === field) ? field : "";
       const metricType = /平均|均值|客单价/i.test(submittedQuery)
         ? "average"
-        : /比例|占比|转化率|送达率|率$/i.test(submittedQuery)
+        : isRatioQuestion(submittedQuery)
           ? "ratio"
           : /总额|合计|销售额|金额|gmv|收入|营收/i.test(submittedQuery)
             ? "amount"
@@ -793,6 +797,11 @@ export default function Home() {
 
   function requireQualityExecutionReady() {
     if (!datasetProfile) return false;
+    if (dataScopeEvidence && requestsOriginalScope(submittedQuery)) {
+      setAgentNavigationNotice("原问题明确要求原始数据，请恢复原始范围；如果确实要换范围，请开始新的分析。");
+      document.getElementById("data-scope-review")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return false;
+    }
     if (dataScopeEvidence && !dataScopeEvidence.confirmedAt) {
       setAgentNavigationNotice("清洗已改变数据范围，请先核对并确认范围变化。");
       document.getElementById("data-scope-review")?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1119,12 +1128,14 @@ export default function Home() {
   }
 
   const executionQualityGate = {
-    ready: qualityReviewComplete && (!dataScopeEvidence || Boolean(dataScopeEvidence.confirmedAt)),
-    message: dataScopeEvidence && !dataScopeEvidence.confirmedAt ? "清洗已改变数据范围，请先核对并确认范围变化。" : needsCleaningConfirmation
+    ready: qualityReviewComplete && (!dataScopeEvidence || (Boolean(dataScopeEvidence.confirmedAt) && !requestsOriginalScope(submittedQuery))),
+    message: dataScopeEvidence && requestsOriginalScope(submittedQuery) ? "原问题要求原始范围，请使用范围提示旁的“恢复原始数据”。" : dataScopeEvidence && !dataScopeEvidence.confirmedAt ? "清洗已改变数据范围，请先核对并确认范围变化。" : needsCleaningConfirmation
       ? "已批准的清洗规则还没有生成并确认派生副本。请先完成清洗预览与确认。"
       : `还有 ${qualityGateStatus.undecided} 项质量风险未判断。请逐项记录保留、核实或处理决定。`,
-    onReview: handleQualityGuideAction,
+    onReview: dataScopeEvidence && requestsOriginalScope(submittedQuery) ? restoreOriginalProfile : handleQualityGuideAction,
   };
+  const scalarGoalErrors = metricContract && submittedQuery
+    ? analysisGoalErrors(submittedQuery, analysisSpecFromMetricContract(metricContract, datasetProfile!)) : [];
 
   function applyUnaffectedQualityRecommendations() {
     if (!metricQualityImpact) return;
@@ -1385,6 +1396,9 @@ export default function Home() {
               {dataScopeEvidence && (
                 <section className="data-scope-review" id="data-scope-review" aria-label="清洗后的分析范围确认">
                   <strong>清洗改变了统计范围，请重新核对</strong>
+                  <button type="button" className="scope-restore-button" onClick={restoreOriginalProfile} disabled={!originalProfile}>恢复原始数据</button>
+                  {!originalProfile && <p>当前浏览器未保留原始数据，请重新上传原始文件；旧证据不会被改写。</p>}
+                  {requestsOriginalScope(submittedQuery) && <p role="alert">原问题明确要求原始范围，不能只勾选清洗范围继续。请恢复原始数据，或开始新的分析明确采用清洗副本。</p>}
                   <p>{dataScopeEvidence.source.fileName} → {dataScopeEvidence.derived.fileName}：{dataScopeEvidence.source.rowCount} → {dataScopeEvidence.derived.rowCount} 行。</p>
                   {dataScopeEvidence.entityField && <p>{dataScopeEvidence.entityField} 的非空唯一编号：{dataScopeEvidence.sourceDistinctEntities} → {dataScopeEvidence.derivedDistinctEntities}。清洗后的数量不能直接代表原始文件的订单数。</p>}
                   <label><input type="checkbox" aria-label="确认清洗后的分析范围" disabled={analysisCompleted} checked={Boolean(dataScopeEvidence.confirmedAt)} onChange={(event) => {
@@ -1862,7 +1876,7 @@ export default function Home() {
                   qualityGate={analysisConfirmationView(agentResponse?.plan ?? businessAnalysisPlan, submittedQuery) === "经营分析" ? {
                     ready: false, message: "原问题需要分组或时间分析，请在经营分析中确认，不能执行单指标替代结果。",
                     onReview: () => { if (agentResponse) setBusinessAnalysisPlan(agentResponse.plan); setProfileView("经营分析"); },
-                  } : executionQualityGate}
+                  } : scalarGoalErrors.length ? { ready: false, message: scalarGoalErrors.join("；"), onReview: () => setProfileView("指标口径") } : executionQualityGate}
                   onExecution={handleMetricExecution}
                   onReviewEvidence={() => taskRunRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })}
                 />

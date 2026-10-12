@@ -10,10 +10,11 @@ export const AGENT_TOOLS = [
   "execute_trend",
   "execute_top_n",
   "validate_result",
+  "request_join",
 ] as const;
 
 export type AgentToolName = typeof AGENT_TOOLS[number];
-export type AgentAnalysisType = "profile" | "quality" | "cleaning" | "metric" | "group_compare" | "trend" | "top_n" | "unsupported";
+export type AgentAnalysisType = "profile" | "quality" | "cleaning" | "metric" | "group_compare" | "trend" | "top_n" | "join" | "unsupported";
 
 export type DatasetAgentContext = {
   fileName: string;
@@ -29,6 +30,7 @@ export type DatasetAgentContext = {
   }>;
   qualityIssues: Array<{ title: string; severity: string; check: string }>;
   availableTools: AgentToolName[];
+  relatedTables?: Array<{ fileName: string; rowCount: number; fields: string[] }>;
 };
 
 export type AgentPlan = {
@@ -86,9 +88,10 @@ export function inferStrongAnalysisType(question: string): AgentAnalysisType | n
     || (!isDistinctCountQuestion(question) && /重复(?:的)?(?:订单|记录|编号)|(?:订单|记录|编号).{0,8}重复/i.test(question))
     || /质量|检查.*(?:异常|缺失|重复)|有哪些.*(?:问题|风险)|能不能用|是否可用|重复统计|算重复|多算|重复值|完全重复/i.test(question)) return "quality";
   if (/数据画像|字段结构|字段类型|多少行|多少列|查看字段/i.test(question)) return "profile";
+  if (/关联|连接|合并|\bjoin\b|(?:品类|类别|分类).{0,12}(?:补到|加到|补充|添加).{0,12}订单/i.test(question)) return "join";
   if (/趋势|月度|按月|同比|环比|随时间|时间变化/i.test(question)) return "trend";
   if (isRankingQuestion(question)) return "top_n";
-  if (/各地区|各区域|各品类|各渠道|(?:比较|对比)(?:不同|各个|各)?(?:地区|区域|渠道|品类)|按[^，。！？]{0,10}(?:地区|区域|品类|渠道)|分组|分群/i.test(question)) return "group_compare";
+  if (/各地区|各区域|各品类|各渠道|(?:比较|对比)(?:不同|各个|各)?(?:地区|区域|渠道|品类)|按[^，。！？]{0,10}(?:地区|区域|品类|渠道|状态)|(?:各(?:种|个)?|不同)(?:订单)?状态|分组|分群/i.test(question)) return "group_compare";
   if (isDistinctCountQuestion(question) || /总额|合计|平均|均值|比例|率|销售额|金额|gmv|收入|营收/i.test(question)) return "metric";
   return null;
 }
@@ -102,7 +105,7 @@ export function keepRelevantFieldBindings(
   bindings: AgentPlan["fieldBindings"],
 ): AgentPlan["fieldBindings"] {
   const empty = { entityField: null, valueField: null, groupField: null, timeField: null };
-  if (["profile", "quality", "cleaning", "unsupported"].includes(analysisType)) return empty;
+  if (["profile", "quality", "cleaning", "join", "unsupported"].includes(analysisType)) return empty;
   if (analysisType === "metric") return {
     entityField: bindings.entityField,
     valueField: bindings.valueField,
@@ -149,7 +152,7 @@ export type PlanAdjustment = {
   after: string | number | null | string[];
 };
 
-export function createDatasetAgentContext(profile: DatasetProfile): DatasetAgentContext {
+export function createDatasetAgentContext(profile: DatasetProfile, relatedProfiles: DatasetProfile[] = []): DatasetAgentContext {
   return {
     fileName: profile.fileName,
     rowCount: profile.rowCount,
@@ -168,5 +171,6 @@ export function createDatasetAgentContext(profile: DatasetProfile): DatasetAgent
       check: issue.check,
     })),
     availableTools: [...AGENT_TOOLS],
+    relatedTables: relatedProfiles.slice(0, 2).map(table => ({ fileName: table.fileName, rowCount: table.rowCount, fields: table.columns.map(column => column.name) })),
   };
 }

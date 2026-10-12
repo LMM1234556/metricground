@@ -837,3 +837,17 @@ button { cursor:pointer; }
   .evidence-tabs,.evidence-content { margin-top:14px; }
   .attribution { margin-top:25px; }
 }
+.scope-restore-button {
+  display: block;
+  margin: 10px 0;
+  padding: 9px 14px;
+  border: 1px solid #0d9488;
+  border-radius: 9px;
+  background: #fff;
+  color: #0f766e;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+.scope-restore-button:disabled { opacity: .5; cursor: not-allowed; }
+.scope-restore-button:focus-visible { outline: 2px solid #2563eb; outline-offset: 3px; }

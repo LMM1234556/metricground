@@ -1,6 +1,7 @@
 import { isDistinctCountQuestion, isRankingQuestion, type AgentPlan } from "./agent-plan.ts";
 import type { CellValue, DatasetProfile } from "./tabular-profile";
 import type { IndependentVerification } from "./independent-verification";
+import { analysisGoalErrors } from "./analysis-goal-guard.ts";
 
 export type BusinessAnalysisType = "group_compare" | "trend" | "top_n";
 export type BusinessAggregation = "count_distinct" | "sum" | "average";
@@ -209,9 +210,11 @@ function pandasAggregation(config: BusinessAnalysisConfig) {
   return `.groupby('_analysis_key').apply(lambda g: pd.to_numeric(g[${value}], errors='coerce').sum(min_count=1) / g.loc[pd.to_numeric(g[${value}], errors='coerce').notna(), ${entity}].nunique() if g.loc[pd.to_numeric(g[${value}], errors='coerce').notna(), ${entity}].nunique() else None)`;
 }
 
-export function buildBusinessAnalysisPlan(profile: DatasetProfile, config: BusinessAnalysisConfig): BusinessAnalysisPlan {
+export function buildBusinessAnalysisPlan(profile: DatasetProfile, config: BusinessAnalysisConfig, question = ""): BusinessAnalysisPlan {
   const names = new Set(profile.columns.map((column) => column.name));
   const errors: string[] = [];
+  errors.push(...analysisGoalErrors(question, { analysisType: config.analysisType, aggregation: config.aggregation, entityField: config.entityField,
+    groupBy: config.analysisType === "trend" ? [] : [{ table: "primary", field: config.groupField }] }));
   if (!config.entityField || !names.has(config.entityField)) errors.push("请选择当前数据中真实存在的统计对象字段");
   if (config.aggregation !== "count_distinct" && (!config.valueField || !names.has(config.valueField))) errors.push("求和或平均分析必须选择数值字段");
   if (config.analysisType === "trend" && (!config.timeField || !names.has(config.timeField))) errors.push("趋势分析必须选择时间字段");
@@ -274,8 +277,8 @@ type Accumulator = {
   invalidValues: number;
 };
 
-export function executeBusinessAnalysis(profile: DatasetProfile, config: BusinessAnalysisConfig): BusinessAnalysisResult {
-  const plan = buildBusinessAnalysisPlan(profile, config);
+export function executeBusinessAnalysis(profile: DatasetProfile, config: BusinessAnalysisConfig, question = ""): BusinessAnalysisResult {
+  const plan = buildBusinessAnalysisPlan(profile, config, question);
   if (!plan.ready) throw new Error(plan.errors.join("；"));
   const groups = new Map<string, Accumulator>();
   let eligibleRows = 0;

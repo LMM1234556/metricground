@@ -32,7 +32,7 @@ export default function BusinessAnalysis({ profile, agentPlan, question, quality
   const [executionError, setExecutionError] = useState("");
   const [codeTab, setCodeTab] = useState<CodeTab>("SQL");
   const [verifying, setVerifying] = useState(false);
-  const plan = useMemo(() => buildBusinessAnalysisPlan(profile, config), [profile, config]);
+  const plan = useMemo(() => buildBusinessAnalysisPlan(profile, config, question), [profile, config, question]);
   const numericColumns = profile.columns.filter((column) => column.inferredType === "数值");
   const dateColumns = profile.columns.filter((column) => column.inferredType === "日期" || /date|time|日期|时间/i.test(column.name));
   const amountReconciliationRisk = config.aggregation !== "count_distinct" && config.valueField
@@ -74,7 +74,7 @@ export default function BusinessAnalysis({ profile, agentPlan, question, quality
       return;
     }
     try {
-      const primary = executeBusinessAnalysis(profile, config);
+      const primary = executeBusinessAnalysis(profile, config, question);
       setResult(primary);
       setExecutionError("");
       setVerifying(true);
