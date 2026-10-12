@@ -13,6 +13,12 @@ export function requestsOriginalScope(question: string) {
 export function analysisGoalErrors(question: string, spec: Pick<AnalysisSpec, "analysisType" | "aggregation" | "groupBy" | "entityField">): string[] {
   const errors: string[] = [];
   const intent = inferStrongAnalysisType(question);
+  if (intent === "join") {
+    errors.push("原问题要求关联补充字段，请进入多表关联确认向导；不能用统计指标替代关联任务。关联后计算其他指标需要开始新的分析。");
+  }
+  if (intent === "unsupported") {
+    errors.push("原问题超出当前受控工具能力，不能通过手动选择其他计算把它标记完成。");
+  }
   if (isRatioQuestion(question) && spec.aggregation !== "ratio") {
     errors.push("原问题要求比例/成功率，当前公式却不是比例。不能用计数、金额合计或平均值替代；需要确认分子和分母。");
   }

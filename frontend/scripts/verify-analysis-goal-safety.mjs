@@ -44,6 +44,8 @@ assert.throws(() => startTaskTool({ ...validRun, question: rateQuestion, analysi
 assert.equal(executeBusinessAnalysis(profile, config, validQuestion).rows.length, 3);
 const joinQuestion = "商品品类补到订单信息";
 assert.equal(inferStrongAnalysisType(joinQuestion), "join");
+assert.equal(buildBusinessAnalysisPlan(profile, config, joinQuestion).ready, false);
+assert.equal(buildBusinessAnalysisPlan(profile, config, "预测下个月销售额").ready, false);
 const related = profileRows([["order_id", "category"], ["A", "X"]], { fileName: "items.csv", fileSize: 20, fileType: "CSV", activeSheet: "CSV 数据", sheetNames: ["CSV 数据"] });
 const context = createDatasetAgentContext(profile, [related]);
 assert.equal(context.relatedTables.length, 1);
