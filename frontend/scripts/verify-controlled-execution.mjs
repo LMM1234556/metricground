@@ -98,7 +98,7 @@ const result = await evaluate(`(async () => {
   clickByText('.profile-tabs button', '指标口径');
   await new Promise((resolve) => setTimeout(resolve, 50));
   setText('metricName', '有效订单量');
-  setText('decisionQuestion', '判断各地区订单规模');
+  setText('decisionQuestion', '核对华东订单数量');
   [...document.querySelectorAll('.contract-confirmations input')].forEach((checkbox) => {
     if (!checkbox.checked) checkbox.click();
   });
