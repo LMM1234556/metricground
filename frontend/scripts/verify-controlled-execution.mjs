@@ -74,7 +74,7 @@ const result = await evaluate(`(async () => {
   }
   const clickByText = (selector, text) => {
     const node = [...document.querySelectorAll(selector)].find((item) => item.textContent.includes(text));
-    if (!node) throw new Error('Cannot find: ' + text);
+    if (!node) throw new Error('Cannot find: ' + text + '; task=' + document.querySelector('.task-state')?.textContent + '; notice=' + document.querySelector('.agent-navigation-notice')?.textContent);
     node.click();
   };
   const setText = (name, value) => {

@@ -665,7 +665,7 @@ export default function Home() {
       setAgentResponse(response);
       const next = createTaskRunFromPlan(datasetProfile, submittedQuery || metricContract.decisionQuestion || metricContract.metricName, response, { qualityDecisions });
       setTaskRun(dataScopeEvidence ? { ...next, dataScopeEvidence: structuredClone(dataScopeEvidence) } : next);
-      if (!submittedQuery) setSubmittedQuery(metricContract.metricName);
+      if (!submittedQuery) setSubmittedQuery(next.question);
     }
     setProfileView("计算执行");
     setAgentNavigationNotice("指标口径已确认。下一步请审核计算计划，再批准执行预览。");
@@ -791,7 +791,7 @@ export default function Home() {
     if (taskRun && ["NEEDS_CLARIFICATION", "NEEDS_APPROVAL", "READY_TO_EXECUTE"].includes(taskRun.state)) {
       return dataScopeEvidence ? { ...taskRun, dataScopeEvidence: structuredClone(dataScopeEvidence) } : taskRun;
     }
-    const next = createTaskRunFromPlan(datasetProfile, submittedQuery || metricContract?.metricName || "受控指标计算", response, { qualityDecisions });
+    const next = createTaskRunFromPlan(datasetProfile, submittedQuery || metricContract?.decisionQuestion || metricContract?.metricName || "受控指标计算", response, { qualityDecisions });
     return dataScopeEvidence ? { ...next, dataScopeEvidence: structuredClone(dataScopeEvidence) } : next;
   }
 
