@@ -2,7 +2,7 @@
 
 MetricGround 面向使用 Excel/CSV 完成常见经营分析的初级数据分析师，提供数据理解、质量检查、指标口径确认、受控计算和结果验证。通用上传数据支持本地 Agent 规划、人工确认、确定性执行、TaskRun 状态追踪与证据导出；Olist 只作为内置演示数据，不再替代用户上传文件的分析结果。
 
-> **交付状态（2026-10-13）**：线上仍为 `v0.3.11` / Sites版本15；本地 `v0.3.12` 正在验证“一对多先汇总、再按左表粒度补充描述字段”的安全关联方案。v0.3.11的[完整CI38289084766](https://github.com/LMM1234556/metricground/actions/runs/38289084766)通过。当前改动不把工程验证写成P05真人复测成功，也不宣称支持数值预聚合、品类金额分摊或分组比例。见[v0.3.12版本记录](docs/releases/v0.3.12.md)、[两位回测](evaluation/user_test_round2/observations_round2.md)和[后三份反馈](evaluation/user_test_remaining/observations.md)。公开站点云请求仍以发布后账本复核为准。
+> **交付状态（2026-10-13）**：`v0.3.12` / Sites版本16已发布；[完整CI #44](https://github.com/LMM1234556/metricground/actions/runs/38335859991)的静态门和真实浏览器回归通过，线上健康检查报告Web/D1正常、匿名访问可用。当前结果不等于P05真人复测成功，也不宣称支持数值预聚合、品类金额分摊或分组比例。见[v0.3.12版本记录](docs/releases/v0.3.12.md)、[两位回测](evaluation/user_test_round2/observations_round2.md)和[后三份反馈](evaluation/user_test_remaining/observations.md)。
 
 ![MetricGround 核心经营指标界面](docs/images/overview.png)
 
