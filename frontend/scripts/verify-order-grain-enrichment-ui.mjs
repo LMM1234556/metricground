@@ -53,6 +53,15 @@ await command("Page.reload", { ignoreCache: true });
 await new Promise((resolve) => setTimeout(resolve, 1000));
 await upload('.upload-button:not(.related-upload) input[type="file"]', orders);
 await upload('.related-upload input[type="file"]', items);
+await evaluate(`(() => {
+  const textarea = document.querySelector('.query-box textarea');
+  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
+  setter.call(textarea, '商品品类补到订单信息');
+  textarea.dispatchEvent(new Event('input', { bubbles: true }));
+  document.querySelector('.query-box').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+})()`);
+await waitFor('.agent-plan-card.clarify');
+await waitFor('.task-run-trace.state-needs_clarification');
 await waitFor(".join-safe-enrichment");
 
 const result = await evaluate(`(async () => {
