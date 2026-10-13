@@ -19,6 +19,7 @@ export type DatasetVersion = {
   rowCount: number;
   columnCount: number;
   fingerprintAlgorithm: "fnv1a32-pair-v1";
+  joinDerivationEvidence?: DatasetProfile["joinDerivationEvidence"];
 };
 
 export type AnalysisSource = {
@@ -108,6 +109,7 @@ export function createDatasetVersion(profile: DatasetProfile): DatasetVersion {
     rowCount: profile.rowCount,
     columnCount: profile.columnCount,
     fingerprintAlgorithm: "fnv1a32-pair-v1",
+    ...(profile.joinDerivationEvidence ? { joinDerivationEvidence: structuredClone(profile.joinDerivationEvidence) } : {}),
   };
 }
 

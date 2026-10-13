@@ -5,8 +5,10 @@ import { AlertCircle, Check, GitMerge, Play, RotateCcw, ShieldCheck, Table2 } fr
 import {
   createJoinSpec,
   executeControlledJoin,
+  executeGrainPreservingEnrichment,
   executeJoinPipeline,
   previewJoin,
+  validateGrainPreservingEnrichment,
   validateJoinSpec,
   type JoinExecutionResult,
   type JoinPipelineResult,
@@ -57,6 +59,7 @@ export default function MultiTableJoin({ profiles, onUseJoinedProfile }: Props) 
   const [joinType, setJoinType] = useState<JoinType>("left");
   const [intendedGrainTableId, setIntendedGrainTableId] = useState(leftTable?.tableId ?? "");
   const [grainDescription, setGrainDescription] = useState("");
+  const [selectedEnrichmentFields, setSelectedEnrichmentFields] = useState<string[] | null>(null);
   const [confirmations, setConfirmations] = useState<Confirmations>(EMPTY_CONFIRMATIONS);
   const [result, setResult] = useState<JoinExecutionResult | null>(null);
   const [savedSpecs, setSavedSpecs] = useState<JoinSpec[]>([]);
@@ -93,9 +96,30 @@ export default function MultiTableJoin({ profiles, onUseJoinedProfile }: Props) 
     }
   }, [catalog, leftTable, rightTable, leftField, rightField, leftField2, rightField2]);
 
+  const enrichmentCandidates = useMemo(() => {
+    if (!rightTable) return [];
+    const keys = new Set([rightField, rightField2].filter(Boolean));
+    return rightTable.profile.columns.filter((column) =>
+      !keys.has(column.name) && ["文本", "混合", "布尔"].includes(column.inferredType)
+    );
+  }, [rightTable, rightField, rightField2]);
+  const recommendedEnrichmentField = enrichmentCandidates.find((column) => /category|type|品类|类别|分类/i.test(column.name))
+    ?? enrichmentCandidates.find((column) => !/id|key|code|no|number|编号|编码|单号/i.test(column.name))
+    ?? enrichmentCandidates[0];
+  const effectiveEnrichmentFields = selectedEnrichmentFields === null
+    ? (recommendedEnrichmentField ? [recommendedEnrichmentField.name] : [])
+    : selectedEnrichmentFields.filter((field) => enrichmentCandidates.some((column) => column.name === field));
+  const useGrainPreservingEnrichment = profiles.length === 2
+    && relationship?.cardinality === "1:N"
+    && joinType === "left"
+    && intendedGrainTableId === leftTable?.tableId;
+  const resolvedGrainDescription = grainDescription || (useGrainPreservingEnrichment
+    ? `一行代表一条${fieldDisplayName(leftField)}唯一的左表业务记录；右表字段为该键下的去重列表`
+    : "");
+
   const spec = useMemo(() => {
     if (!relationship) return null;
-    const draft = createJoinSpec(catalog, relationship, { joinType, intendedGrainTableId, intendedGrainDescription: grainDescription });
+    const draft = createJoinSpec(catalog, relationship, { joinType, intendedGrainTableId, intendedGrainDescription: resolvedGrainDescription });
     return {
       ...draft,
       keyMeaningConfirmed: confirmations.key,
@@ -105,8 +129,11 @@ export default function MultiTableJoin({ profiles, onUseJoinedProfile }: Props) 
       expansionRiskAcknowledged: confirmations.expansion,
       status: Object.values(confirmations).every(Boolean) ? "confirmed" as const : "draft" as const,
     };
-  }, [catalog, relationship, joinType, intendedGrainTableId, grainDescription, confirmations]);
+  }, [catalog, relationship, joinType, intendedGrainTableId, resolvedGrainDescription, confirmations]);
   const validation = spec ? validateJoinSpec(catalog, spec) : null;
+  const enrichmentValidation = spec && useGrainPreservingEnrichment
+    ? validateGrainPreservingEnrichment(catalog, spec, effectiveEnrichmentFields)
+    : null;
   const preview = spec ? previewJoin(catalog, spec) : null;
 
   function selectCommonFields(nextLeftTableId: string, nextRightTableId: string, preferred?: RelationshipProfile) {
@@ -126,8 +153,10 @@ export default function MultiTableJoin({ profiles, onUseJoinedProfile }: Props) 
     setRightField(nextRightField);
     setLeftField2(preferred?.leftFields[1] ?? "");
     setRightField2(preferred?.rightFields[1] ?? "");
-    setIntendedGrainTableId(preferred?.cardinality === "1:N" ? nextRightTableId : nextLeftTableId);
-    setJoinType(preferred?.cardinality === "1:N" ? "inner" : "left");
+    setSelectedEnrichmentFields(null);
+    const preferSafeLeftGrain = profiles.length === 2 && preferred?.cardinality === "1:N";
+    setIntendedGrainTableId(preferSafeLeftGrain ? nextLeftTableId : preferred?.cardinality === "1:N" ? nextRightTableId : nextLeftTableId);
+    setJoinType(preferSafeLeftGrain ? "left" : preferred?.cardinality === "1:N" ? "inner" : "left");
     setConfirmations(EMPTY_CONFIRMATIONS);
     setResult(null);
     setPipelineResult(null);
@@ -148,9 +177,13 @@ export default function MultiTableJoin({ profiles, onUseJoinedProfile }: Props) 
   }
 
   function execute() {
-    if (!spec || !validation?.valid) return;
+    const approved = useGrainPreservingEnrichment ? enrichmentValidation?.valid : validation?.valid;
+    if (!spec || !approved) return;
     try {
-      if (savedSpecs.length) {
+      if (useGrainPreservingEnrichment) {
+        setResult(executeGrainPreservingEnrichment(catalog, spec, effectiveEnrichmentFields));
+        setPipelineResult(null);
+      } else if (savedSpecs.length) {
         setPipelineResult(executeJoinPipeline(catalog, [...savedSpecs, spec]));
         setResult(null);
       } else {
@@ -226,6 +259,21 @@ export default function MultiTableJoin({ profiles, onUseJoinedProfile }: Props) 
     onUseJoinedProfile({
       ...joined,
       joinAmountReconciliations: pipelineResult?.amountReconciliations ?? result?.amountReconciliations ?? [],
+      ...(result?.preaggregation && spec ? { joinDerivationEvidence: {
+        operation: "right-distinct-list-by-key" as const,
+        sourceVersionIds: [spec.leftVersionId, spec.rightVersionId],
+        leftKeys: [...spec.leftFields],
+        rightKeys: [...spec.rightFields],
+        selectedRightFields: [...result.preaggregation.selectedFields],
+        grainDescription: spec.intendedGrainDescription,
+        leftSourceRows: result.sourceRows.left,
+        rightSourceRows: result.sourceRows.right,
+        groupedRightKeys: result.preaggregation.groupedKeys,
+        matchedRightKeys: result.preaggregation.matchedGroupedKeys,
+        unmatchedLeftRows: result.unmatchedLeftRows,
+        rightOrphanRows: relationship?.rightOrphanRows ?? 0,
+        outputRows: result.outputRows,
+      } } : {}),
     });
   }
 
@@ -236,6 +284,7 @@ export default function MultiTableJoin({ profiles, onUseJoinedProfile }: Props) 
   const activeRecords = pipelineResult?.records ?? result?.records ?? [];
   const activeChecks = pipelineResult?.checks ?? result?.checks ?? [];
   const activeReconciliations = pipelineResult?.amountReconciliations ?? result?.amountReconciliations ?? [];
+  const activeValidation = useGrainPreservingEnrichment ? enrichmentValidation : validation;
 
   return (
     <div className="join-workbench">
@@ -269,9 +318,30 @@ export default function MultiTableJoin({ profiles, onUseJoinedProfile }: Props) 
           <label><span>输出粒度所属表 *</span><select aria-label="输出粒度表" value={intendedGrainTableId} onChange={(event) => { setIntendedGrainTableId(event.target.value); resetDecision(); }}><option value={leftTable.tableId}>{leftTable.alias}</option><option value={rightTable.tableId}>{rightTable.alias}</option></select></label>
           <label><span>左复合键（可选）</span><select aria-label="左复合键" value={leftField2} onChange={(event) => { setLeftField2(event.target.value); resetDecision(); }}><option value="">不使用</option>{leftTable.profile.columns.filter((column) => column.name !== leftField).map((column) => <option value={column.name} key={column.name}>{fieldDisplayName(column.name)}</option>)}</select></label>
           <label><span>右复合键（可选）</span><select aria-label="右复合键" value={rightField2} onChange={(event) => { setRightField2(event.target.value); resetDecision(); }}><option value="">不使用</option>{rightTable.profile.columns.filter((column) => column.name !== rightField).map((column) => <option value={column.name} key={column.name}>{fieldDisplayName(column.name)}</option>)}</select></label>
-          <label className="join-grain-description"><span>关联后每一行代表什么 *</span><input aria-label="关联后粒度说明" value={grainDescription} onChange={(event) => { setGrainDescription(event.target.value); resetDecision(); }} placeholder={savedSpecs.length ? "例如：附加区域属性后仍是一行一订单" : "例如：一行仍代表一笔订单"} /></label>
+          <label className="join-grain-description"><span>关联后每一行代表什么 *</span><input aria-label="关联后粒度说明" value={resolvedGrainDescription} onChange={(event) => { setGrainDescription(event.target.value); resetDecision(); }} placeholder={savedSpecs.length ? "例如：附加区域属性后仍是一行一订单" : "例如：一行仍代表一笔订单"} /></label>
         </div>
       </section>
+
+      {useGrainPreservingEnrichment && (
+        <section className="join-safe-enrichment" aria-label="订单粒度安全补充方案">
+          <div className="join-safe-enrichment-heading">
+            <ShieldCheck size={18} />
+            <div><strong>推荐：先汇总右表，再补充到左表</strong><p>直接关联会把同一笔订单展开成多行。此方案先按 {fieldDisplayName(rightField)} 汇总所选描述字段，再做 Left join；保留全部左表记录，且不自动汇总右表数值字段。</p></div>
+          </div>
+          <div className="join-enrichment-fields">
+            <span>选择要补充的描述字段 *</span>
+            <div>{enrichmentCandidates.map((column) => {
+              const checked = effectiveEnrichmentFields.includes(column.name);
+              return <label key={column.name}><input type="checkbox" checked={checked} onChange={() => {
+                const current = effectiveEnrichmentFields;
+                setSelectedEnrichmentFields(checked ? current.filter((field) => field !== column.name) : [...current, column.name]);
+                resetDecision();
+              }} /><span>{fieldDisplayName(column.name)}</span>{column.name === recommendedEnrichmentField?.name && <small>推荐</small>}</label>;
+            })}</div>
+          </div>
+          <div className="join-safe-enrichment-impact"><span>直接关联：{preview?.estimatedOutputRows ?? "-"} 行 / {preview?.estimatedExpansion.toFixed(2) ?? "-"}x</span><strong>安全方案：{leftTable.profile.rowCount} 行 / 1.00x</strong></div>
+        </section>
+      )}
 
       {relationship && preview && (
         <section className="join-profile">
@@ -280,8 +350,8 @@ export default function MultiTableJoin({ profiles, onUseJoinedProfile }: Props) 
             <div><span>关系类型</span><strong>{relationship.cardinality}</strong></div>
             <div><span>{savedSpecs.length ? "桥接表覆盖率" : "左表覆盖率"}</span><strong>{(relationship.leftRowCoverage * 100).toFixed(1)}%</strong></div>
             <div><span>左/右孤儿行</span><strong>{relationship.leftOrphanRows} / {relationship.rightOrphanRows}</strong></div>
-            <div><span>{savedSpecs.length ? "桥接表预览行" : "预计输出行"}</span><strong>{preview.estimatedOutputRows}</strong></div>
-            <div><span>预计膨胀</span><strong>{preview.estimatedExpansion.toFixed(2)}x</strong></div>
+            <div><span>{savedSpecs.length ? "桥接表预览行" : "预计输出行"}</span><strong>{useGrainPreservingEnrichment ? leftTable.profile.rowCount : preview.estimatedOutputRows}</strong></div>
+            <div><span>预计膨胀</span><strong>{useGrainPreservingEnrichment ? "1.00" : preview.estimatedExpansion.toFixed(2)}x</strong></div>
           </div>
           {relationship.warnings.map((warning) => <p className="execution-warning" key={warning}><AlertCircle size={13} />{warning}</p>)}
           {savedSpecs.length > 0 && <p className="join-preview-scope"><AlertCircle size={13} />本步骤画像基于原始桥接表；最终订单粒度行数会在完整三表管线执行后重新校验。</p>}
@@ -294,20 +364,23 @@ export default function MultiTableJoin({ profiles, onUseJoinedProfile }: Props) 
           {([
             ["key", `我确认两列都表示同一种业务对象：${fieldDisplayName(leftField)} ↔ ${fieldDisplayName(rightField)}。`],
             ["relationship", `我确认 ${relationship.cardinality} 的含义：${relationshipExplanation(relationship.cardinality)}。`],
-            ["grain", `我确认关联后每一行仍表示：${grainDescription || "尚未填写"}。`],
+            ["grain", `我确认关联后每一行仍表示：${resolvedGrainDescription || "尚未填写"}。`],
             ["orphan", `我知晓有 ${relationship.leftOrphanRows} 行左表记录无法匹配；${joinType === "left" ? "Left join 会保留这些记录" : "Inner join 会排除这些记录"}。`],
-            ["expansion", `我知晓预计行数为原来的 ${relationship.estimatedLeftJoinExpansion.toFixed(2)} 倍；若超过 1 倍，金额可能被重复累计。`],
+            ["expansion", useGrainPreservingEnrichment
+              ? `我确认系统将先按右键汇总所选描述字段；不直接展开明细，左表金额不会因本次关联重复累计。`
+              : `我知晓预计行数为原来的 ${relationship.estimatedLeftJoinExpansion.toFixed(2)} 倍；若超过 1 倍，金额可能被重复累计。`],
           ] as Array<[keyof Confirmations, string]>).map(([key, label]) => <label key={key}><input type="checkbox" checked={confirmations[key]} onChange={(event) => { setConfirmations((current) => ({ ...current, [key]: event.target.checked })); setResult(null); setPipelineResult(null); }} /><ShieldCheck size={14} /><span>{label}</span></label>)}
         </section>
       )}
 
-      {validation && !validation.valid && <div className="join-errors"><AlertCircle size={15} /><div><strong>尚不能执行关联</strong><p>{validation.errors.join("；")}</p></div></div>}
+      {activeValidation && !activeValidation.valid && <div className="join-errors"><AlertCircle size={15} /><div><strong>尚不能执行关联</strong><p>{activeValidation.errors.join("；")}</p></div></div>}
       {error && <div className="execution-error"><AlertCircle size={14} />{error}</div>}
-      <div className="execution-approval"><div><strong>原始文件保持不变</strong><span>{savedSpecs.length ? "执行时将复用已确认的步骤 1，并对两步关联整体复核。" : "关联结果只在浏览器生成派生数据，不覆盖上传文件。"}</span></div><button type="button" disabled={!validation?.valid} onClick={execute}><Play size={15} />{savedSpecs.length ? "批准并执行三表关联" : "批准并执行关联"}</button></div>
+      <div className="execution-approval"><div><strong>原始文件保持不变</strong><span>{useGrainPreservingEnrichment ? "先在浏览器内按键汇总右表描述字段，再生成左表粒度派生数据。" : savedSpecs.length ? "执行时将复用已确认的步骤 1，并对两步关联整体复核。" : "关联结果只在浏览器生成派生数据，不覆盖上传文件。"}</span></div><button type="button" disabled={!activeValidation?.valid} onClick={execute}><Play size={15} />{useGrainPreservingEnrichment ? "批准并执行安全补充" : savedSpecs.length ? "批准并执行三表关联" : "批准并执行关联"}</button></div>
 
       {(result || pipelineResult) && (
         <section className="join-result">
-          <div className="join-result-heading"><div><Check size={15} /><span><strong>{pipelineResult ? "三表关联完成并通过校验" : "关联完成并通过校验"}</strong><small>{pipelineResult ? `${pipelineResult.steps.map((step) => `${step.beforeRows}→${step.afterRows}`).join("，")}；最终 ${pipelineResult.records.length} 行` : `${result!.sourceRows.left} + ${result!.sourceRows.right} 源行 → ${result!.outputRows} 结果行`}</small></span></div><button type="button" onClick={useResult}><Table2 size={14} />将关联结果用于分析</button></div>
+          <div className="join-result-heading"><div><Check size={15} /><span><strong>{pipelineResult ? "三表关联完成并通过校验" : result?.preaggregation ? "右表已汇总并安全补充" : "关联完成并通过校验"}</strong><small>{pipelineResult ? `${pipelineResult.steps.map((step) => `${step.beforeRows}→${step.afterRows}`).join("，")}；最终 ${pipelineResult.records.length} 行` : result?.preaggregation ? `${result.sourceRows.left} 行左表 + ${result.sourceRows.right} 行右表明细 → ${result.outputRows} 行左表粒度结果` : `${result!.sourceRows.left} + ${result!.sourceRows.right} 源行 → ${result!.outputRows} 结果行`}</small></span></div><button type="button" onClick={useResult}><Table2 size={14} />将关联结果用于分析</button></div>
+          {result?.preaggregation && <div className="join-preaggregation-receipt"><strong>预聚合记录</strong><span>右表 {result.preaggregation.sourceRows} 行 → {result.preaggregation.groupedKeys} 个非空关联键；匹配 {result.preaggregation.matchedGroupedKeys} 个键；字段 {result.preaggregation.selectedFields.map(fieldDisplayName).join("、")} 生成去重列表。</span></div>}
           {pipelineResult && <div className="pipeline-step-results">{pipelineResult.steps.map((step, index) => <div key={step.joinSpecId}><span>步骤 {index + 1}</span><strong>{step.beforeRows} → {step.afterRows} 行</strong><small>匹配输出 {step.matchedOutputRows}，未匹配左表行 {step.unmatchedLeftRows}</small></div>)}</div>}
           {activeReconciliations.length > 0 && (
             <div className="join-reconciliation" aria-label="关联金额对账">

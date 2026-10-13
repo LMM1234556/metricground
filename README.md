@@ -2,7 +2,7 @@
 
 MetricGround 面向使用 Excel/CSV 完成常见经营分析的初级数据分析师，提供数据理解、质量检查、指标口径确认、受控计算和结果验证。通用上传数据支持本地 Agent 规划、人工确认、确定性执行、TaskRun 状态追踪与证据导出；Olist 只作为内置演示数据，不再替代用户上传文件的分析结果。
 
-> **交付状态（2026-10-13）**：`v0.3.11` 已部署到 [公开测试环境](https://metricground.chirpyseed1.chatgpt.site)，Sites版本15。[完整CI38289084766](https://github.com/LMM1234556/metricground/actions/runs/38289084766)通过。依据P01-P05标号反馈增加明确原目标的一致性保护、可发现的恢复入口和关联确认向导承接；分组比例仍未实现，现明确阻止金额等替代计算。见[版本记录](docs/releases/v0.3.11.md)、[两位回测](evaluation/user_test_round2/observations_round2.md)和[后三份反馈](evaluation/user_test_remaining/observations.md)。保留[首次失败](evaluation/user_test_round1/observations_round1.md)，不将数学对账或熟悉用户回测算作盲测准确率。发布检查云请求19/20、剩1次，开发发布未新增推理请求。
+> **交付状态（2026-10-13）**：线上仍为 `v0.3.11` / Sites版本15；本地 `v0.3.12` 正在验证“一对多先汇总、再按左表粒度补充描述字段”的安全关联方案。v0.3.11的[完整CI38289084766](https://github.com/LMM1234556/metricground/actions/runs/38289084766)通过。当前改动不把工程验证写成P05真人复测成功，也不宣称支持数值预聚合、品类金额分摊或分组比例。见[v0.3.12版本记录](docs/releases/v0.3.12.md)、[两位回测](evaluation/user_test_round2/observations_round2.md)和[后三份反馈](evaluation/user_test_remaining/observations.md)。公开站点云请求仍以发布后账本复核为准。
 
 ![MetricGround 核心经营指标界面](docs/images/overview.png)
 

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createJoinSpec, executeControlledJoin, executeJoinPipeline, previewJoin, validateJoinSpec } from "../app/lib/controlled-join.ts";
+import { createJoinSpec, executeControlledJoin, executeGrainPreservingEnrichment, executeJoinPipeline, previewJoin, validateGrainPreservingEnrichment, validateJoinSpec } from "../app/lib/controlled-join.ts";
 import { createDatasetCatalog, profileRelationship } from "../app/lib/dataset-catalog.ts";
 import { profileRows } from "../app/lib/tabular-profile.ts";
 
@@ -40,6 +40,24 @@ unsafeItemSpec = confirmed(unsafeItemSpec, "一行代表一笔订单");
 const unsafeValidation = validateJoinSpec(catalog, unsafeItemSpec);
 assert.equal(unsafeValidation.valid, false);
 assert(unsafeValidation.errors.some((error) => error.includes("输出粒度")));
+
+const enrichmentValidation = validateGrainPreservingEnrichment(catalog, unsafeItemSpec, ["category"]);
+assert.equal(enrichmentValidation.valid, true);
+assert.equal(validateGrainPreservingEnrichment(catalog, unsafeItemSpec, []).valid, false);
+const orderGrainEnrichment = executeGrainPreservingEnrichment(catalog, unsafeItemSpec, ["category"]);
+assert.equal(orderGrainEnrichment.outputRows, 4);
+assert.equal(orderGrainEnrichment.expansion, 1);
+assert.equal(orderGrainEnrichment.records.find((record) => record["orders.order_id"] === "O-1")["items.category_distinct_list"], "A、B");
+assert.equal(orderGrainEnrichment.records.find((record) => record["orders.order_id"] === "O-4")["items.category_distinct_list"], null);
+assert.equal(orderGrainEnrichment.preaggregation.sourceRows, 5);
+assert.equal(orderGrainEnrichment.preaggregation.groupedKeys, 4);
+assert.equal(orderGrainEnrichment.preaggregation.matchedGroupedKeys, 3);
+const preservedOrderAmount = orderGrainEnrichment.amountReconciliations.find((item) => item.qualifiedField === "orders.amount");
+assert.equal(preservedOrderAmount.status, "balanced");
+assert.equal(preservedOrderAmount.sourceTotal, 350);
+assert.equal(preservedOrderAmount.outputTotal, 350);
+assert(orderGrainEnrichment.checks.every((check) => check.passed));
+assert(orderGrainEnrichment.warnings.some((warning) => warning.includes("右表有 1 行")));
 
 let itemSpec = createJoinSpec(catalog, itemRel, { joinType: "inner", intendedGrainTableId: itemTable.tableId });
 itemSpec = confirmed(itemSpec, "一行代表一条已匹配订单商品明细");
@@ -87,9 +105,10 @@ assert.equal(pipelineOrderAmount.status, "mixed");
 assert.equal(pipelineOrderAmount.outputTotal, 400);
 
 console.log(JSON.stringify({
-  checks: 40,
+  checks: 55,
   safeN1: { outputRows: orderCustomerJoin.outputRows, unmatchedLeftRows: orderCustomerJoin.unmatchedLeftRows, amountStatus: safeOrderAmount.status },
   unsafe1NBlocked: !unsafeValidation.valid,
+  safeOrderGrainEnrichment: { outputRows: orderGrainEnrichment.outputRows, categoryList: orderGrainEnrichment.records[0]["items.category_distinct_list"], amountStatus: preservedOrderAmount.status },
   safe1NInner: { outputRows: orderItemJoin.outputRows, cardinality: orderItemJoin.cardinality, amountStatus: riskyOrderAmount.status, amountDelta: riskyOrderAmount.netDelta },
   manyToManyBlocked: !validateJoinSpec(manyCatalog, manySpec).valid,
   threeTablePipeline: { rows: threeTable.records.length, tables: threeTable.tableIds.length, steps: threeTable.steps.length },

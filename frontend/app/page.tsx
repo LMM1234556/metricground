@@ -26,7 +26,7 @@ import MultiTableJoin from "./components/multi-table-join";
 import NoviceGuide, { type GuideStep } from "./components/novice-guide";
 import { createDatasetAgentContext, isDistinctCountQuestion, type AgentPlan, type AgentPlanResponse } from "./lib/agent-plan";
 import { analysisSpecFromBusinessConfig, analysisSpecFromMetricContract } from "./lib/analysis-spec";
-import { approveTaskRun, completeTaskTool, createTaskRunFromPlan, failTaskTool, recordEvidenceExport, startTaskTool } from "./lib/agent-runtime";
+import { approveTaskRun, completeJoinTaskRun, completeTaskTool, createTaskRunFromPlan, failTaskTool, recordEvidenceExport, startTaskTool } from "./lib/agent-runtime";
 import type { TaskRun } from "./lib/task-run";
 import { bindQualityEvidence } from "./lib/task-evidence";
 import { businessFieldLabel, fieldDisplayName, rawFieldName } from "./lib/field-label";
@@ -540,6 +540,15 @@ export default function Home() {
   }
 
   function applyJoinedProfile(profile: DatasetProfile) {
+    let completedJoinRun: TaskRun | null = null;
+    if (profile.joinDerivationEvidence && taskRun) {
+      try {
+        completedJoinRun = completeJoinTaskRun(taskRun, profile);
+      } catch (caught) {
+        setFileError(caught instanceof Error ? caught.message : "关联任务证据保存失败。");
+        return;
+      }
+    }
     setDatasetProfile(profile);
     setOriginalProfile(profile);
     setRelatedProfiles([]);
@@ -550,12 +559,14 @@ export default function Home() {
     setMetricContract(null);
     setExecutionQualityImpact(null);
     setContractErrors([]);
-    setAgentResponse(null);
-    setTaskRun(null);
+    setAgentResponse(completedJoinRun ? agentResponse : null);
+    setTaskRun(completedJoinRun);
     setBusinessAnalysisPlan(null);
     setHasJoinedDataset(true);
     setEvidenceExport(null);
-    setAgentNavigationNotice("关联结果已作为新的派生数据版本载入，请先核对字段画像与输出粒度。");
+    setAgentNavigationNotice(completedJoinRun
+      ? "关联任务已完成并保存证据；派生数据已载入。请先核对字段画像与输出粒度，再开始新的分析。"
+      : "关联结果已作为新的派生数据版本载入，请先核对字段画像与输出粒度。");
     setQuery("");
     setSubmittedQuery("");
     setProfileView("画像");

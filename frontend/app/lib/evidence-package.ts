@@ -292,7 +292,12 @@ function renderVerification(evidence: EvidencePackage) {
 export function evidenceAsMarkdown(evidence: EvidencePackage) {
   const tools = evidence.toolCalls.map((call) => `- ${call.tool}: ${call.status}${call.outputSummary ? ` - ${call.outputSummary}` : ""}${call.error ? ` - ${call.error}` : ""}`).join("\n") || "- 无";
   const approvals = evidence.approvals.map((approval) => `- ${approval.type}: ${approval.decision} - ${approval.statement}`).join("\n") || "- 无";
-  const datasets = evidence.datasets.map((dataset) => `- ${dataset.fileName} / ${dataset.sheetName}: ${dataset.rowCount} 行 x ${dataset.columnCount} 列，版本 ${dataset.versionId}`).join("\n");
+  const datasets = evidence.datasets.map((dataset) => {
+    const summary = `- ${dataset.fileName} / ${dataset.sheetName}: ${dataset.rowCount} 行 x ${dataset.columnCount} 列，版本 ${dataset.versionId}`;
+    return dataset.joinDerivationEvidence
+      ? `${summary}\n  - 派生方式：右表按键生成描述值去重列表；${dataset.joinDerivationEvidence.leftSourceRows} 行左表 + ${dataset.joinDerivationEvidence.rightSourceRows} 行右表 → ${dataset.joinDerivationEvidence.outputRows} 行左表粒度结果；未匹配左表 ${dataset.joinDerivationEvidence.unmatchedLeftRows} 行。`
+      : summary;
+  }).join("\n");
   return [
     "# MetricGround 分析报告与审计证据",
     "",
@@ -305,6 +310,7 @@ export function evidenceAsMarkdown(evidence: EvidencePackage) {
     "## 数据版本",
     "",
     datasets,
+    ...evidence.datasets.flatMap((dataset) => dataset.joinDerivationEvidence ? ["", "关联派生证据：", "", codeBlock(JSON.stringify(dataset.joinDerivationEvidence, null, 2))] : []),
     "",
     "## 数据范围变化与确认",
     "",

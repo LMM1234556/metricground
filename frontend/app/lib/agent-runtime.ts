@@ -160,6 +160,73 @@ export function failTaskTool(
   return markTaskFailure(next, { code: input.code, message: input.message, recoverable: input.recoverable ?? true, at: input.now });
 }
 
+export function completeJoinTaskRun(run: TaskRun, derivedProfile: DatasetProfile, now?: string) {
+  const derivation = derivedProfile.joinDerivationEvidence;
+  if (!derivation) throw new Error("派生数据缺少关联预聚合证据，不能把关联任务标记完成");
+  if (run.planningEvidence?.proposal?.analysisType !== "join") throw new Error("当前 TaskRun 不是多表关联任务，不能接收关联结果");
+  const taskSourceVersionIds = [...new Set(run.datasetVersions.map((version) => version.versionId))];
+  const derivationSourceVersionIds = [...new Set(derivation.sourceVersionIds)];
+  if (
+    taskSourceVersionIds.length !== 2
+    || derivationSourceVersionIds.length !== 2
+    || !taskSourceVersionIds.every((versionId) => derivationSourceVersionIds.includes(versionId))
+  ) {
+    throw new Error("关联结果绑定的源数据版本与当前 TaskRun 不一致");
+  }
+  if (derivation.selectedRightFields.length === 0) throw new Error("关联结果没有记录右表补充字段");
+  if (derivation.outputRows !== derivation.leftSourceRows) throw new Error("关联结果没有保持左表粒度，不能把关联任务标记完成");
+  const reconciliations = derivedProfile.joinAmountReconciliations ?? [];
+  if (reconciliations.some((item) => item.status !== "balanced")) throw new Error("左表金额未守恒，不能把关联任务标记完成");
+
+  let next = run;
+  if (next.state === "NEEDS_CLARIFICATION") {
+    next = transitionTaskRun(next, "PLANNING", "用户已在受控关联向导中补充键、关系、粒度和预聚合字段", now);
+    next = setTaskPlan(next, next.plan, null, now);
+    next = transitionTaskRun(next, "NEEDS_APPROVAL", "关联定义完整，等待最终执行批准", now);
+  }
+  if (next.state !== "NEEDS_APPROVAL") throw new Error(`当前任务不能接收关联完成记录：${next.state}`);
+  next = recordApproval(next, {
+    type: "join",
+    decision: "approved",
+    statement: `已确认左右键、1:N关系、Left join、左表输出粒度，以及右表字段 ${derivation.selectedRightFields.join("、")} 按键生成去重列表。`,
+    at: now,
+  });
+  next = transitionTaskRun(next, "READY_TO_EXECUTE", "人工确认已记录，允许执行粒度保持关联", now);
+  next = transitionTaskRun(next, "EXECUTING", "调用确定性工具 execute_grain_preserving_join", now);
+  const execution = startToolCall(next, "execute_grain_preserving_join", {
+    operation: derivation.operation,
+    sourceVersionIds: derivation.sourceVersionIds,
+    leftKeys: derivation.leftKeys,
+    rightKeys: derivation.rightKeys,
+    selectedRightFields: derivation.selectedRightFields,
+    grainDescription: derivation.grainDescription,
+  }, { now });
+  next = succeedToolCall(execution.run, execution.callId, `${derivation.rightSourceRows} 行右表明细预聚合后，生成 ${derivation.outputRows} 行左表粒度结果`, now);
+  next = transitionTaskRun(next, "VALIDATING", "关联执行完成，开始验证粒度、孤儿记录和金额守恒", now);
+  const validation = startToolCall(next, "validate_join_result", {
+    operation: derivation.operation,
+    leftSourceRows: derivation.leftSourceRows,
+    rightSourceRows: derivation.rightSourceRows,
+    groupedRightKeys: derivation.groupedRightKeys,
+    matchedRightKeys: derivation.matchedRightKeys,
+    unmatchedLeftRows: derivation.unmatchedLeftRows,
+    rightOrphanRows: derivation.rightOrphanRows,
+    outputRows: derivation.outputRows,
+    amountReconciliations: reconciliations,
+  }, { now });
+  next = succeedToolCall(validation.run, validation.callId, "输出保持左表粒度，未匹配左表记录已保留，左表金额字段对账通过", now);
+  const derivedVersion = createDatasetVersion(derivedProfile);
+  const datasetVersions = [...next.datasetVersions.filter((version) => version.versionId !== derivedVersion.versionId), derivedVersion];
+  if (datasetVersions.length > 3) throw new Error("关联任务证据最多绑定两张源表和一张派生表");
+  next = {
+    ...next,
+    datasetVersions,
+    validationSummary: "粒度保持、孤儿记录处置、数据版本和左表金额守恒均已通过确定性校验",
+    resultSummary: `已把 ${derivation.selectedRightFields.join("、")} 按关联键汇总为去重列表，并补充到 ${derivation.outputRows} 行左表记录；未匹配左表 ${derivation.unmatchedLeftRows} 行保留为空。`,
+  };
+  return transitionTaskRun(next, "COMPLETED", "受控关联和结构校验完成，派生数据版本已保存", now);
+}
+
 export function recordEvidenceExport(run: TaskRun, now?: string, format: "json" | "markdown" = "json") {
   const started = startToolCall(run, "export_evidence", { taskRunId: run.id, format }, { now });
   return succeedToolCall(started.run, started.callId, `已导出不含原始数据行的${format === "markdown" ? "分析报告" : "审计证据包"}`, now);

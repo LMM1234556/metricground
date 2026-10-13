@@ -55,6 +55,22 @@ export type JoinAmountReconciliation = {
   status: "balanced" | "duplicated" | "excluded" | "mixed";
 };
 
+export type JoinDerivationEvidence = {
+  operation: "right-distinct-list-by-key";
+  sourceVersionIds: string[];
+  leftKeys: string[];
+  rightKeys: string[];
+  selectedRightFields: string[];
+  grainDescription: string;
+  leftSourceRows: number;
+  rightSourceRows: number;
+  groupedRightKeys: number;
+  matchedRightKeys: number;
+  unmatchedLeftRows: number;
+  rightOrphanRows: number;
+  outputRows: number;
+};
+
 export type DatasetProfile = {
   fileName: string;
   fileSize: number;
@@ -72,6 +88,7 @@ export type DatasetProfile = {
   qualityChecksSkipped: QualityCheckSkip[];
   qualitySummary: QualitySummary;
   joinAmountReconciliations?: JoinAmountReconciliation[];
+  joinDerivationEvidence?: JoinDerivationEvidence;
   records: Array<Record<string, CellValue>>;
 };
 

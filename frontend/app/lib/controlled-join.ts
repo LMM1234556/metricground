@@ -73,7 +73,22 @@ export type JoinExecutionResult = {
   amountReconciliations: JoinAmountReconciliation[];
   checks: JoinExecutionCheck[];
   warnings: string[];
-  engine: "browser-deterministic-join";
+  preaggregation?: {
+    side: "right";
+    operation: "distinct-list-by-key";
+    sourceRows: number;
+    groupedKeys: number;
+    matchedGroupedKeys: number;
+    selectedFields: string[];
+  };
+  engine: "browser-deterministic-join" | "browser-deterministic-grain-preserving-enrichment";
+};
+
+export type GrainPreservingEnrichmentValidation = {
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+  relationship: RelationshipProfile;
 };
 
 export type JoinPipelineResult = {
@@ -126,6 +141,11 @@ function qualifiedKey(record: JoinedRecord, source: CatalogTable, fields: string
 
 function displayKey(key: string) {
   return key.split("\u001f").map((part) => part.replace(/^[^:]+:/, "")).join(" + ");
+}
+
+function displayValue(value: CellValue) {
+  if (value instanceof Date) return value.toISOString();
+  return typeof value === "string" ? value.trim() : String(value);
 }
 
 function qualifiedRecord(source: CatalogTable, record: Record<string, CellValue> | null): JoinedRecord {
@@ -304,6 +324,55 @@ export function validateJoinSpec(catalog: DatasetCatalog, spec: JoinSpec): JoinS
   return { valid: errors.length === 0, errors, warnings: [...new Set(warnings)], relationship, recommendedGrainTableId: recommended };
 }
 
+export function validateGrainPreservingEnrichment(
+  catalog: DatasetCatalog,
+  spec: JoinSpec,
+  selectedFields: string[],
+): GrainPreservingEnrichmentValidation {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const left = table(catalog, spec.leftTableId);
+  const right = table(catalog, spec.rightTableId);
+  const relationship = profileRelationship(catalog, {
+    leftTableId: spec.leftTableId,
+    rightTableId: spec.rightTableId,
+    leftFields: spec.leftFields,
+    rightFields: spec.rightFields,
+  });
+  const allowedFields = new Map(right.profile.columns
+    .filter((column) => !spec.rightFields.includes(column.name))
+    .map((column) => [column.name, column.inferredType]));
+  const uniqueFields = [...new Set(selectedFields)];
+
+  if (spec.version !== "1.0") errors.push("不支持的 JoinSpec 版本");
+  if (spec.leftVersionId !== left.version.versionId || spec.rightVersionId !== right.version.versionId) {
+    errors.push("数据版本已变化，必须重新生成关联画像");
+  }
+  if (relationship.cardinality !== "1:N") errors.push("粒度保持方案仅适用于左表唯一、右表多行的一对多关系");
+  if (spec.joinType !== "left") errors.push("保留全部左表业务对象时必须使用 Left join");
+  if (spec.intendedGrainTableId !== left.tableId) errors.push("粒度保持方案的输出粒度必须属于左表");
+  if (!spec.keyMeaningConfirmed) errors.push("尚未确认左右关联键的业务含义一致");
+  if (!spec.relationshipConfirmed) errors.push("尚未确认一对多关系符合业务预期");
+  if (!spec.grainConfirmed || !spec.intendedGrainDescription.trim()) errors.push("尚未确认关联后的输出粒度");
+  if ((relationship.leftOrphanRows > 0 || relationship.rightOrphanRows > 0) && !spec.orphanRiskAcknowledged) {
+    errors.push("存在未匹配记录，必须确认孤儿键处置方式");
+  }
+  if (!spec.expansionRiskAcknowledged) errors.push("尚未确认直接关联的重复累计风险和预聚合处置");
+  if (uniqueFields.length < 1) errors.push("请至少选择一个需要补充到左表的描述字段");
+  uniqueFields.forEach((field) => {
+    const inferredType = allowedFields.get(field);
+    if (!inferredType) errors.push(`右表字段“${field}”不存在、属于关联键或不可用于补充`);
+    else if (!['文本', '混合', '布尔'].includes(inferredType)) {
+      errors.push(`字段“${field}”是${inferredType}字段；本方案只生成描述值去重列表，不自动汇总数值或日期`);
+    }
+  });
+  if (spec.status !== "confirmed") errors.push("关联方案尚未完成人工确认");
+  if (relationship.leftOrphanRows > 0) warnings.push(`左表有 ${relationship.leftOrphanRows} 行没有明细，将保留并把补充字段设为空`);
+  if (relationship.rightOrphanRows > 0) warnings.push(`右表有 ${relationship.rightOrphanRows} 行无法匹配左表，不会附加到任何左表记录`);
+  warnings.push("右表描述字段按关联键生成去重列表；列表只能用于查找或展示，不能按列表成员分摊左表金额");
+  return { valid: errors.length === 0, errors, warnings, relationship };
+}
+
 function keySamples(
   left: CatalogTable,
   right: CatalogTable,
@@ -415,6 +484,87 @@ export function executeControlledJoin(catalog: DatasetCatalog, spec: JoinSpec): 
     checks,
     warnings: [...new Set([...validation.warnings, ...reconciliationWarnings])],
     engine: "browser-deterministic-join",
+  };
+}
+
+export function executeGrainPreservingEnrichment(
+  catalog: DatasetCatalog,
+  spec: JoinSpec,
+  selectedFields: string[],
+): JoinExecutionResult {
+  const validation = validateGrainPreservingEnrichment(catalog, spec, selectedFields);
+  if (!validation.valid) throw new Error(`粒度保持关联未获准执行：${validation.errors.join("；")}`);
+  const left = table(catalog, spec.leftTableId);
+  const right = table(catalog, spec.rightTableId);
+  const fields = [...new Set(selectedFields)];
+  const rightGroups = new Map<string, Array<{ record: Record<string, CellValue>; index: number }>>();
+  right.profile.records.forEach((record, index) => {
+    const key = rawKey(record, spec.rightFields);
+    if (key === null) return;
+    const group = rightGroups.get(key) ?? [];
+    group.push({ record, index });
+    rightGroups.set(key, group);
+  });
+
+  let matchedOutputRows = 0;
+  let unmatchedLeftRows = 0;
+  const matchedRightKeys = new Set<string>();
+  const records = left.profile.records.map((leftRecord, leftIndex) => {
+    const key = rawKey(leftRecord, spec.leftFields);
+    const matches = key === null ? [] : rightGroups.get(key) ?? [];
+    if (matches.length > 0 && key !== null) {
+      matchedOutputRows += 1;
+      matchedRightKeys.add(key);
+    } else unmatchedLeftRows += 1;
+    const aggregated = Object.fromEntries(fields.map((field) => {
+      const distinct = new Map<string, string>();
+      matches.forEach(({ record }) => {
+        const value = record[field];
+        if (missing(value)) return;
+        distinct.set(keyPart(value as CellValue), displayValue(value as CellValue));
+      });
+      return [`${right.alias}.${field}_distinct_list`, distinct.size ? [...distinct.values()].join("、") : null];
+    }));
+    return withLineage(
+      { ...qualifiedRecord(left, leftRecord), ...aggregated },
+      { [left.tableId]: [leftIndex], [right.tableId]: matches.map((match) => match.index) },
+    );
+  });
+
+  const reconciliations = amountReconciliations(catalog, records, [left.tableId]);
+  const checks: JoinExecutionCheck[] = [
+    { label: "右表明细已按关联键预聚合", passed: true, detail: `${right.profile.rowCount} 行明细归并为 ${rightGroups.size} 个非空键` },
+    { label: "输出保持左表粒度", passed: records.length === left.profile.rowCount, detail: `${left.profile.rowCount} 行进入，${records.length} 行输出` },
+    { label: "未匹配左表记录已保留", passed: records.length - matchedOutputRows === unmatchedLeftRows, detail: `保留 ${unmatchedLeftRows} 行未匹配记录，补充字段为空` },
+    { label: "原始一对多关系未漂移", passed: validation.relationship.cardinality === "1:N", detail: `确认前后均为 ${validation.relationship.cardinality}` },
+    { label: "数据版本一致", passed: spec.leftVersionId === left.version.versionId && spec.rightVersionId === right.version.versionId, detail: "执行使用人工确认时绑定的数据版本" },
+    ...reconciliations.map(reconciliationCheck),
+  ];
+  const failedChecks = checks.filter((check) => !check.passed);
+  if (failedChecks.length > 0) {
+    throw new Error(`粒度保持关联后的确定性校验失败：${failedChecks.map((check) => check.label).join("、")}`);
+  }
+  return {
+    records,
+    tableIds: [left.tableId, right.tableId],
+    sourceRows: { left: left.profile.rowCount, right: right.profile.rowCount },
+    outputRows: records.length,
+    matchedOutputRows,
+    unmatchedLeftRows,
+    expansion: left.profile.rowCount === 0 ? 0 : records.length / left.profile.rowCount,
+    cardinality: validation.relationship.cardinality,
+    amountReconciliations: reconciliations,
+    checks,
+    warnings: validation.warnings,
+    preaggregation: {
+      side: "right",
+      operation: "distinct-list-by-key",
+      sourceRows: right.profile.rowCount,
+      groupedKeys: rightGroups.size,
+      matchedGroupedKeys: matchedRightKeys.size,
+      selectedFields: fields,
+    },
+    engine: "browser-deterministic-grain-preserving-enrichment",
   };
 }
 
