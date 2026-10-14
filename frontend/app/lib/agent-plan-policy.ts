@@ -7,10 +7,18 @@ import { isRatioQuestion } from "./analysis-goal-guard.ts";
 // Safety and clarification preserve the identified task; they never promote an
 // unsupported task or change a ranking/trend into a scalar amount calculation.
 export function enforcePolicyGuards(plan: AgentPlan, question: string): AgentPlan {
-  if (isRatioQuestion(question) && ["group_compare", "trend", "top_n"].includes(plan.analysisType)) {
+  if (isRatioQuestion(question) && ["trend", "top_n"].includes(plan.analysisType)) {
     return { ...plan, action: "unsupported", summary: "已识别分组比例需求，但当前版本尚不支持。",
       clarification: "成功率/比例需要逐组定义分子和分母，当前不能用金额合计、计数或平均值替代。此任务不会执行，也不会标记计算完成。",
       tools: ["profile_dataset"], steps: ["说明分组比例能力限制", "保留原问题，不执行替代计算"], nextView: null };
+  }
+  if (isRatioQuestion(question) && plan.analysisType === "group_compare") {
+    return { ...plan, action: "clarify", summary: "已识别分组比例需求，请确认成功条件和分母范围。",
+      clarification: "请在经营分析页选择订单编号、地区、成功状态和分母范围；每组分别计算成功订单数 ÷ 范围内订单数，同一订单只计一次。",
+      fieldBindings: { ...plan.fieldBindings, valueField: null },
+      tools: ["profile_dataset", "run_quality_checks", "execute_group_compare", "validate_result"],
+      steps: ["确认分组和去重编号", "确认分子条件和分母范围", "批准后逐组计算比例", "独立复核分子、分母及比例边界"],
+      limitations: [...new Set([...plan.limitations, "成功状态和分母范围必须人工确认；分母为零的分组不显示为0%。"])], nextView: "经营分析" };
   }
   if (inferStrongAnalysisType(question) === "unsupported" || plan.analysisType === "unsupported") {
     return {

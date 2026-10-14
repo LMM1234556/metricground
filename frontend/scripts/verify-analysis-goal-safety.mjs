@@ -6,7 +6,7 @@ import { enforcePolicyGuards } from "../app/lib/agent-plan-policy.ts";
 import { createTaskRunFromPlan, approveTaskRun, startTaskTool } from "../app/lib/agent-runtime.ts";
 import { createDataScopeEvidence } from "../app/lib/analysis-handoff.ts";
 import { applyCleaningPlan } from "../app/lib/data-cleaning.ts";
-import { createBusinessAnalysisConfig, buildBusinessAnalysisPlan, executeBusinessAnalysis } from "../app/lib/business-analysis.ts";
+import { buildBusinessAnalysisPlan, executeBusinessAnalysis } from "../app/lib/business-analysis.ts";
 import { analysisSpecFromBusinessConfig } from "../app/lib/analysis-spec.ts";
 import { buildEvidencePackage, verifyEvidencePackage } from "../app/lib/evidence-package.ts";
 
@@ -18,7 +18,8 @@ const config = { analysisType: "group_compare", aggregation: "sum", entityField:
 const plan = { analysisType: "group_compare", action: "clarify", summary: "确认地区指标", clarification: "请选择具体指标", confidence: .75,
   tools: ["profile_dataset", "execute_group_compare"], steps: ["确认地区指标"], fieldBindings: { entityField: "order_id", valueField: "amount", groupField: "region", timeField: null }, limitations: [], nextView: "经营分析" };
 const rateQuestion = "比较不同地区的送货成功率";
-assert.equal(enforcePolicyGuards(plan, rateQuestion).action, "unsupported");
+assert.equal(enforcePolicyGuards(plan, rateQuestion).action, "clarify");
+assert.equal(enforcePolicyGuards(plan, rateQuestion).nextView, "经营分析");
 assert.equal(buildBusinessAnalysisPlan(profile, config, rateQuestion).ready, false);
 assert.throws(() => executeBusinessAnalysis(profile, config, rateQuestion), /比例/);
 const rateRun = createTaskRunFromPlan(profile, rateQuestion, { plan, source: "policy-router", model: null, stepsExecuted: 0, latencyMs: 0 });

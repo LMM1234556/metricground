@@ -1,6 +1,6 @@
 # MetricGround 当前能力与证据矩阵
 
-> 当前基准日期：2026-10-13（线上v0.3.12 / Sites版本16）
+> 当前基准日期：2026-10-14（线上v0.3.15 / Sites版本19）
 > 产品阶段：可用于面试演示和目标用户测试的 MVP，不是生产级企业数据平台。
 
 ## 产品定位
@@ -13,12 +13,12 @@ MetricGround 面向使用 Excel/CSV 完成常见经营分析的初级数据分�
 |---|---|---|---|
 | CSV/XLSX 数据画像 | 已完成 | `verify-file-profile.mjs`、`verify-core-boundaries.mjs`、`verify-upload-boundaries.mjs` | 已限制 10 万行/200 列并拦截常见伪装与二进制文件；复杂合并单元格、多层表头仍未系统验证 |
 | 数据质量检查 | 已完成基础规则 | `verify-quality-checks.mjs`、`verify-quality-impact.mjs` | 跨字段业务规则和企业自定义合法值域仍有限 |
-| 受控清洗副本 | 已完成 | `verify-cleaning-workflow.mjs` | 只允许完全重复、指定字段缺失、无效日期三类白名单规则 |
+| 受控清洗副本 | 已完成，已接入口径相关性提示 | `verify-cleaning-workflow.mjs`、`verify-business-quality-review.mjs`、`verify-cleaning-guidance-markup.mjs` | 只允许完全重复、指定字段缺失、无效日期三类白名单规则；相关性提示不是自动删行结论 |
 | 指标口径合同 | 可读草案、名称/类型一致性与原目标检查已加入 | `verify-metric-contract.mjs`、`verify-analysis-handoff.mjs`、`verify-analysis-handoff-ui.mjs` | 文字范围不会自动变成筛选；企业定义仍需确认；真人理解改善待回测，通用任意聚合量比例未实现 |
 | 单指标受控计算 | 已完成 | `verify-controlled-execution.mjs`、`verify-core-boundaries.mjs`、`test:execution:mobile` | 浏览器确定性主计算 + DuckDB-WASM 独立 SQL 复算；已覆盖移动冷缓存模拟 4G，业务口径仍需人工确认 |
-| 分组、趋势、Top N | 基础聚合已实现 | `verify-business-analysis-core.mjs`、`verify-business-analysis.mjs` | 只支持计数、求和、平均；分组比例未实现，现明确阻止替代计算，不执行任意生成代码 |
-| 原目标一致性与恢复入口 | v0.3.11已发布，工程回归通过 | `verify-analysis-goal-safety.mjs`、18项实际API回归、恢复/比例页面断言、CI38289084766 | 只保护可识别的明确目标，不是任意语言语义判定；用户复测未完成 |
-| Agent关联承接 | join规划与人工向导已接入 | 多表字段画像、关联版本证据、request_join与多表关联入口 | 不自动选键或执行；P05旧版首次任务失败保留，不把工程回归写成用户完成 |
+| 分组、趋势、Top N | 计数、求和、平均和分组去重对象比例已实现 | `verify-business-analysis-core.mjs`、`verify-business-analysis.mjs`、`verify-group-ratio.mjs`、`verify-group-ratio-duckdb.mjs` | 分组比例只支持文本状态等于/不等于/非空；不支持比例趋势、比例Top N或任意聚合量之比；不执行任意生成代码 |
+| 原目标一致性与恢复入口 | v0.3.15已发布，场景回测文件完成核对 | `verify-analysis-goal-safety.mjs`、实际API回归、恢复页面断言、P03最终证据 | 只保护可识别的明确目标，不是任意语言语义判定；场景核对不等于独立无指导用户研究 |
+| Agent关联承接 | join规划、人工向导与派生结果恢复已接入 | 多表字段画像、关联版本证据、`request_join`、`verify-dataset-result.mjs`、P05导出CSV | 不自动选键；P05最终结果由人工确认关系后执行，不代表自主关联能力 |
 | `AnalysisSpec` | 已完成 | `verify-agent-foundation.mjs` | 当前为项目内部协议，不是外部行业标准 |
 | `TaskRun` 状态机与持久化 | 已完成 | `verify-agent-runtime.mjs`、`verify-task-persistence.mjs`、`verify-workspace-recovery.mjs` | D1 保存审计元数据，IndexedDB 保存当前浏览器工作区；跨设备仍需重传原始文件 |
 | API 基础防护 | 已完成本地验收 | `verify-task-persistence.mjs` | D1 固定窗口限流、同源写入、请求体上限和安全头；不是企业级 WAF |
@@ -33,8 +33,8 @@ MetricGround 面向使用 Excel/CSV 完成常见经营分析的初级数据分�
 | 本地/云模型降级 | 历史真实工具/API/网页链路完成；受限云试验开启 | `verify-cloud-model-trial.mjs`、`verify-hosted-cloud-trial.ps1`；真实任务保存cloud-agent/Qwen元数据、最终口径、计算与复核 | 自建探针和少量网页任务不是盲测准确率；v0.3.8保存的是系统候选计划，不能反推模型工具原决策 |
 | 云模型控费 | 出站门禁与 SQL/fetch 回归完成 | `verify-model-cost-policy.mjs`；累计20次、每问题2次、输出512 Token、输入24KB | 请求量上限不是金额硬上限；本地/公网账本分开；免费保护与账单需控制台核实 |
 | 新人引导自动化验收 | 已完成 | `verify-novice-guide.mjs` 24/24；5 份测试文件均可读取 | 只能证明流程闭环，不代表真实新人理解和独立完成 |
-| 正式目标用户研究 | P01-P05标号的任务/反馈已收集，保留失败 | 两位回测和后三份observations；P05真实Qwen提交unsupported，关联未执行 | 不能自动称五位独立首次用户；身份、提示与用时未核实，不算总体成功率或模型准确率 |
-| 远程仓库与公开入口 | v0.3.12已发布匿名测试环境 | Sites16、完整CI38335859991；一对多安全补充浏览器链路、Web/D1和匿名会话正常 | 真人P05复测仍未完成；工程结果不能替代目标用户可用性证据 |
+| 正式目标用户研究 | P01-P05标号场景的首次问题与修复回测已收集 | `five_scenario_retest_summary_2026-10-14.md`及历史observations；最终文件与所选口径核对 | 不能自动称五位独立首次用户；身份、是否无指导及用时未核实，不算总体成功率或模型准确率 |
+| 远程仓库与公开入口 | v0.3.15已发布匿名演示环境 | Sites19；2026-10-14健康检查v0.3.15、Web/D1正常；匿名会话与限流保留 | 仓库同步后的GitHub CI需以对应提交状态为准；公开演示不等于生产SLA |
 | 数据库、权限、多人协作 | 部分完成 | D1 持久化、幂等并发控制、条件式所有者隔离 | 无任务历史 UI、角色权限、团队空间和企业治理，不应描述为企业级数据平台 |
 
 ## 面试时可以陈述的结论
@@ -46,7 +46,7 @@ MetricGround 面向使用 Excel/CSV 完成常见经营分析的初级数据分�
 
 ## 下一阶段
 
-1. 先邀请两名首次参与者按 `evaluation/user_test_round1/host_protocol.md` 顺序测试；其余三份包等待额度与首轮反馈再安排；
+1. 邀请未参与开发、未接受实时指导的首次参与者按固定协议完成计时任务，把首次结果与修复回测分开；
 2. 若托管任务出现真实故障或恢复通知，保留平台通知、时间窗口和对应 Worker 日志；健康轮次按设计静默，平台当前不提供运行历史，不能伪造送达证据；
-3. 根据用户失败点决定是否补通用比例、非常规金额字段指定和复杂 Excel 支持。
-4. 模型已受限接入；先固定v0.3.9并在系统回答前记录参与者自己的问法，审阅原决策与程序调整。按真实source分开统计规则、模型和额度兜底，修复回测不回填首次结果。
+3. 根据新一轮独立测试失败点决定是否补通用比例、非常规金额字段指定和复杂 Excel 支持。
+4. 模型已受限接入；在系统回答前记录参与者自己的问法，审阅原决策与程序调整。按真实source分开统计规则、模型和额度兜底，修复回测不回填首次结果。

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertCircle, Check, ChevronRight, CircleHelp, FileCheck2, FileSpreadsheet, Gauge,
   LoaderCircle, MessageSquareText, Plus, Send,
@@ -24,6 +24,7 @@ import BusinessAnalysis, { type BusinessAnalysisLifecycleEvent } from "./compone
 import TaskRunTrace, { type EvidenceExportFormat, type EvidenceExportStatus } from "./components/task-run-trace";
 import MultiTableJoin from "./components/multi-table-join";
 import NoviceGuide, { type GuideStep } from "./components/novice-guide";
+import DatasetResult, { downloadDatasetCsv } from "./components/dataset-result";
 import { createDatasetAgentContext, isDistinctCountQuestion, type AgentPlan, type AgentPlanResponse } from "./lib/agent-plan";
 import { analysisSpecFromBusinessConfig, analysisSpecFromMetricContract } from "./lib/analysis-spec";
 import { approveTaskRun, completeJoinTaskRun, completeTaskTool, createTaskRunFromPlan, failTaskTool, recordEvidenceExport, startTaskTool } from "./lib/agent-runtime";
@@ -31,6 +32,8 @@ import type { TaskRun } from "./lib/task-run";
 import { bindQualityEvidence } from "./lib/task-evidence";
 import { businessFieldLabel, fieldDisplayName, rawFieldName } from "./lib/field-label";
 import { assessQualityImpact, type QualityImpactSummary } from "./lib/quality-impact";
+import { createBusinessAnalysisConfig, type BusinessAnalysisConfig } from "./lib/business-analysis";
+import { businessQualityReview, businessQualityConfigFromSpec } from "./lib/business-quality-review";
 import { clearWorkspaceSession, loadWorkspaceSession, saveWorkspaceSession } from "./lib/workspace-session";
 import { analysisConfirmationView, createDataScopeEvidence, rebindMetricDraft, rebindTaskAfterCleaning, type DataScopeEvidence } from "./lib/analysis-handoff";
 import { requestsOriginalScope, isRatioQuestion, analysisGoalErrors } from "./lib/analysis-goal-guard";
@@ -77,7 +80,7 @@ const onTimeDelivery = snapshot.deliveryReview.groups.find((row) => row.status =
 
 type EvidenceTab = "口径" | "SQL" | "校验";
 type AnalysisMode = "overview" | "trend" | "combined" | "category" | "delivery" | "unsupported";
-type ProfileView = "画像" | "质量检查" | "清洗方案" | "多表关联" | "指标口径" | "计算执行" | "经营分析";
+type ProfileView = "画像" | "结果明细" | "质量检查" | "清洗方案" | "多表关联" | "指标口径" | "计算执行" | "经营分析";
 type QualityDecision = "approved" | "kept";
 type PersistenceStatus = { status: "idle" | "saving" | "saved" | "conflict" | "error"; message: string };
 type SessionStatus = { authenticated: boolean; required: boolean; anonymous?: boolean } | null;
@@ -281,6 +284,10 @@ export default function Home() {
   const [fileError, setFileError] = useState("");
   const [profileView, setProfileView] = useState<ProfileView>("画像");
   const [qualityDecisions, setQualityDecisions] = useState<Record<string, QualityDecision>>({});
+  const [businessQualityDraft, setBusinessQualityDraft] = useState<{ profile: DatasetProfile; question: string; config: BusinessAnalysisConfig; confirmed: boolean } | null>(null);
+  const handleBusinessConfigChange = useCallback((config: BusinessAnalysisConfig, confirmed: boolean) => {
+    if (datasetProfile) setBusinessQualityDraft({ profile: datasetProfile, question: submittedQuery, config, confirmed });
+  }, [datasetProfile, submittedQuery]);
   const [metricDraft, setMetricDraft] = useState<MetricDraft | null>(null);
   const [metricContract, setMetricContract] = useState<MetricContract | null>(null);
   const [executionQualityImpact, setExecutionQualityImpact] = useState<QualityImpactSummary | null>(null);
@@ -854,7 +861,7 @@ export default function Home() {
       const passed = event.result.checks.filter((check) => check.passed).length;
       const independent = event.result.independentVerification;
       const validation = `${passed}/${event.result.checks.length} 项基础检查通过；DuckDB-WASM ${independent?.engineVersion ?? "未知版本"} 独立复核${independent?.status === "passed" ? "通过" : "未通过"}；排除 ${event.result.excludedGroupingRows} 行无效分组/日期和 ${event.result.excludedInvalidValues} 个无效数值。`;
-      const summary = event.result.rows.slice(0, 5).map((row) => `${row.key}=${row.value.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}`).join("，");
+      const summary = event.result.rows.slice(0, 5).map((row) => `${row.key}=${event.config.aggregation === "ratio" ? `${(row.value * 100).toFixed(2)}%（${row.numerator}/${row.denominator}）` : row.value.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}`).join("，");
       setTaskRun(completeTaskTool(started.run, {
         callId: started.callId,
         outputSummary: `生成 ${event.result.rows.length} 个分析结果`,
@@ -864,6 +871,7 @@ export default function Home() {
           engine: event.result.engine, sourceRows: event.result.sourceRows, eligibleRows: event.result.eligibleRows,
           excludedGroupingRows: event.result.excludedGroupingRows, excludedMissingEntities: event.result.excludedMissingEntities,
           excludedInvalidValues: event.result.excludedInvalidValues, fullGroupCount: event.result.fullGroupCount,
+          ...(event.config.aggregation === "ratio" ? { excludedScopeRows: event.result.excludedScopeRows, zeroDenominatorGroups: event.result.zeroDenominatorGroups } : {}),
           groups: event.result.rows.slice(0, 100), groupsTruncated: event.result.rows.length > 100,
         },
         validationEvidence: independent ? {
@@ -991,7 +999,15 @@ export default function Home() {
       ? ["orders-primary-key", "review-order-grain", "negative-review-rate-range"]
       : ["orders-primary-key", "items-composite-key", "gmv-reconciliation", "purchase-time"];
   const visibleValidation = snapshot.validation.filter((item) => validationIds.includes(item.id));
-  const metricQualityImpact = datasetProfile && metricDraft && analysisConfirmationView(agentResponse?.plan ?? businessAnalysisPlan, submittedQuery) !== "经营分析"
+  const isBusinessQualityContext = analysisConfirmationView(agentResponse?.plan ?? businessAnalysisPlan, submittedQuery) === "经营分析";
+  const currentBusinessDraft = businessQualityDraft?.profile === datasetProfile && businessQualityDraft.question === submittedQuery ? businessQualityDraft : null;
+  const completedBusinessSpec = taskRun?.state === "COMPLETED" && taskRun.question === submittedQuery && isBusinessQualityContext ? taskRun.analysisSpec : null;
+  const businessQualityConfig = datasetProfile && isBusinessQualityContext ? currentBusinessDraft?.config
+    ?? (completedBusinessSpec ? businessQualityConfigFromSpec(completedBusinessSpec) : createBusinessAnalysisConfig(datasetProfile, agentResponse?.plan ?? businessAnalysisPlan, submittedQuery)) : null;
+  const qualityScopeConfirmed = isBusinessQualityContext ? (currentBusinessDraft ? currentBusinessDraft.confirmed : Boolean(completedBusinessSpec)) : Boolean(metricDraft?.grainConfirmed);
+  const metricQualityImpact = datasetProfile && businessQualityConfig
+    ? businessQualityReview(datasetProfile, businessQualityConfig, submittedQuery, qualityScopeConfirmed)
+    : datasetProfile && metricDraft && !isBusinessQualityContext
     ? executionQualityImpact ?? metricContract?.qualityImpact ?? assessQualityImpact(datasetProfile.qualityIssues, {
       metricName: metricDraft.metricName || "当前口径草案",
       metricType: metricDraft.metricType,
@@ -1370,7 +1386,7 @@ export default function Home() {
                 </div>
                 <div className="profile-tools">
                   <div className="profile-tabs" role="tablist" aria-label="数据检查视图">
-                    {(["画像", "质量检查", "清洗方案", "多表关联", "指标口径", "经营分析", "计算执行"] as ProfileView[]).map((view) => (
+                    {(["画像", ...(hasJoinedDataset || datasetProfile.joinDerivationEvidence ? ["结果明细"] : []), "质量检查", "清洗方案", "多表关联", "指标口径", "经营分析", "计算执行"] as ProfileView[]).map((view) => (
                       <button
                         type="button"
                         role="tab"
@@ -1404,6 +1420,14 @@ export default function Home() {
                 </div>
               )}
 
+              {(hasJoinedDataset || datasetProfile.joinDerivationEvidence) && (
+                <div className="derived-result-actions" aria-label="关联结果操作">
+                  <div><strong>关联结果已保留</strong><span>{datasetProfile.rowCount.toLocaleString("zh-CN")} 行 · {datasetProfile.columnCount} 列；可随时回看当前结果。</span></div>
+                  <button type="button" onClick={() => setProfileView("结果明细")}>查看结果</button>
+                  <button type="button" onClick={() => downloadDatasetCsv(datasetProfile)}><FileDown size={15} />下载 CSV</button>
+                </div>
+              )}
+
               {dataScopeEvidence && (
                 <section className="data-scope-review" id="data-scope-review" aria-label="清洗后的分析范围确认">
                   <strong>清洗改变了统计范围，请重新核对</strong>
@@ -1421,7 +1445,9 @@ export default function Home() {
                 </section>
               )}
 
-              {profileView === "画像" ? (
+              {profileView === "结果明细" ? (
+                <DatasetResult key={datasetProfile.fileName} profile={datasetProfile} />
+              ) : profileView === "画像" ? (
                 <>
                   <div className="profile-stats">
                     <div><span>数据行</span><strong>{datasetProfile.rowCount.toLocaleString("zh-CN")}</strong></div>
@@ -1478,7 +1504,7 @@ export default function Home() {
                   </div>
 
                   <div className="approval-note">
-                    <ShieldCheck size={16} />处理按钮只记录你的决定，不会修改或覆盖原始文件；实际转换必须在下一步再次确认。
+                    <ShieldCheck size={16} />质量检查需要判断，不要求把所有提示都清洗掉。先看“本次指标”：无关问题可保留；相关问题先核实；删行会改变统计范围，下一步会展示预计影响。
                   </div>
 
                   {datasetProfile.qualityChecksSkipped.length > 0 && (
@@ -1493,8 +1519,8 @@ export default function Home() {
                   {metricQualityImpact && (
                     <section className="quality-impact-summary" aria-label="质量风险与当前指标的相关性">
                       <div className="quality-impact-copy">
-                        <span>按当前口径草案判断</span>
-                        <strong>{metricDraft?.metricName || `按 ${metricDraft?.entityField || "统计对象"} 计算`}</strong>
+                        <span>{qualityScopeConfirmed ? "按已确认的当前口径判断" : "按候选口径判断，仍需确认字段"}</span>
+                        <strong>{isBusinessQualityContext ? submittedQuery : metricDraft?.metricName || `按 ${metricDraft?.entityField || "统计对象"} 计算`}</strong>
                         <p>{metricQualityImpact.statement}</p>
                         <small>此判断只适用于当前公式、筛选和粒度；更换指标后会自动重新评估。</small>
                       </div>
@@ -1571,7 +1597,7 @@ export default function Home() {
                             <dl>
                               <div><dt>证据</dt><dd>{issue.evidence}</dd></div>
                               <div><dt>影响</dt><dd>{issue.impact}</dd></div>
-                              <div><dt>建议</dt><dd>{issue.recommendation}</dd></div>
+                              <div><dt>通用建议</dt><dd>{issue.recommendation}</dd></div>
                               {impact && <div className="quality-impact-detail"><dt>本次指标</dt><dd><strong>{impact.reason}</strong><span>Agent 建议：{impact.recommendedAction}</span></dd></div>}
                             </dl>
                             <div className="quality-actions">
@@ -1579,12 +1605,12 @@ export default function Home() {
                                 type="button"
                                 className={decision === "kept" ? "active kept" : ""}
                                 onClick={() => recordQualityDecision(issue.id, "kept")}
-                              >暂不处理</button>
+                              >保留原样 / 暂不处理</button>
                               <button
                                 type="button"
                                 className={decision === "approved" ? "active approved" : ""}
                                 onClick={() => recordQualityDecision(issue.id, "approved")}
-                              >{issue.supportedRepair ? "批准清洗建议" : "确认已核实"}</button>
+                              >{issue.supportedRepair ? "批准清洗建议（会删行）" : "确认已核实"}</button>
                               {decision && <span><Check size={13} />已记录：{decision === "approved"
                                 ? issue.supportedRepair ? "批准清洗" : "人工核实"
                                 : "保留原样"}</span>}
@@ -1619,10 +1645,18 @@ export default function Home() {
                   originalProfile={originalProfile}
                   decisions={qualityDecisions}
                   receipt={cleaningReceipt}
+                  qualityImpact={metricQualityImpact}
+                  entityField={businessQualityConfig?.entityField || metricDraft?.entityField}
+                  scopeConfirmed={qualityScopeConfirmed}
+                  analysisQuestion={submittedQuery}
                   onApply={applyCleanedProfile}
                   onRestore={restoreOriginalProfile}
                   nextLabel={analysisConfirmationView(agentResponse?.plan ?? businessAnalysisPlan, submittedQuery)}
                   onSkip={() => {
+                    const keptDecisions = { ...qualityDecisions };
+                    datasetProfile.qualityIssues.filter(issue => issue.supportedRepair && keptDecisions[issue.id] === "approved").forEach(issue => { keptDecisions[issue.id] = "kept"; });
+                    setQualityDecisions(keptDecisions);
+                    if (taskRun && taskRun.state !== "COMPLETED") setTaskRun(bindQualityEvidence(taskRun, datasetProfile, keptDecisions));
                     const target = analysisConfirmationView(agentResponse?.plan ?? businessAnalysisPlan, submittedQuery);
                     if (target === "经营分析" && agentResponse) setBusinessAnalysisPlan(agentResponse.plan);
                     setProfileView(target);
@@ -1874,6 +1908,8 @@ export default function Home() {
                 <BusinessAnalysis
                   key={`${datasetProfile.fileName}-${businessAnalysisPlan?.analysisType ?? "manual"}-${submittedQuery}`}
                   profile={datasetProfile}
+                  initialConfig={currentBusinessDraft?.config ?? (completedBusinessSpec ? businessQualityConfigFromSpec(completedBusinessSpec) : undefined)}
+                  onConfigChange={handleBusinessConfigChange}
                   agentPlan={businessAnalysisPlan}
                   question={submittedQuery}
                   qualityGate={executionQualityGate}

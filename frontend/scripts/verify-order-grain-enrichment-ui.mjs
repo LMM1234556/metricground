@@ -1,10 +1,13 @@
 import WebSocket from "ws";
 import path from "node:path";
 
-const orders = path.resolve("../evaluation/fixtures/join_orders_sample.csv");
-const items = path.resolve("../evaluation/fixtures/join_items_sample.csv");
-const targets = await fetch("http://127.0.0.1:9224/json/list").then((response) => response.json());
-const target = targets.find((item) => item.url === "http://localhost:5173/");
+const fixtureRoot = process.env.METRICGROUND_FIXTURES ?? "../evaluation/fixtures";
+const orders = path.resolve(fixtureRoot, "join_orders_sample.csv");
+const items = path.resolve(fixtureRoot, "join_items_sample.csv");
+const browserUrl = process.env.METRICGROUND_BROWSER_URL ?? "http://127.0.0.1:9224";
+const appUrl = process.env.METRICGROUND_APP_URL ?? "http://localhost:5173/";
+const targets = await fetch(`${browserUrl}/json/list`).then((response) => response.json());
+const target = targets.find((item) => item.url === appUrl);
 if (!target) throw new Error("MetricGround browser target not found");
 const socket = new WebSocket(target.webSocketDebuggerUrl);
 const pending = new Map();
@@ -119,6 +122,41 @@ const checks = {
     && result.used.taskSummary.includes("category"),
   noRuntimeExceptions: runtimeErrors.length === 0,
 };
-console.log(JSON.stringify({ checks, result, runtimeErrors }, null, 2));
+
+await waitFor('.derived-result-actions');
+await evaluate(`document.querySelector('.derived-result-actions button').click()`);
+await waitFor('.dataset-result-table');
+const inspectResult = await evaluate(`(async () => {
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const createObjectURL = URL.createObjectURL;
+  const click = HTMLAnchorElement.prototype.click;
+  URL.createObjectURL = function(blob) { window.__csvBlob = blob; return createObjectURL.call(URL, blob); };
+  HTMLAnchorElement.prototype.click = function() { window.__csvFileName = this.download; };
+  try {
+    document.querySelector('.dataset-result-heading button').click();
+    const csv = await window.__csvBlob.text();
+    const rows = [...document.querySelectorAll('.dataset-result-table tbody tr')].map(row => [...row.querySelectorAll('td')].map(cell => cell.textContent.trim()));
+    const tab = document.querySelector('[role="tab"][aria-selected="true"]')?.textContent.trim();
+    [...document.querySelectorAll('[role="tab"]')].find(button => button.textContent === '画像').click();
+    await sleep(60);
+    document.querySelector('.derived-result-actions button').click();
+    await sleep(600);
+    return { rows, csv, fileName: window.__csvFileName, tab, reopened: Boolean(document.querySelector('.dataset-result-table')), emptyCell: Boolean(document.querySelector('.empty-cell [aria-label="空值"]')) };
+  } finally { URL.createObjectURL = createObjectURL; HTMLAnchorElement.prototype.click = click; }
+})()`);
+await command('Page.reload', { ignoreCache: true });
+await waitFor('.dataset-result-table', 15000);
+const restored = await evaluate(`({ rows: document.querySelectorAll('.dataset-result-table tbody tr').length, actions: document.querySelector('.derived-result-actions')?.textContent, tab: document.querySelector('[role="tab"][aria-selected="true"]')?.textContent.trim() })`);
+Object.assign(checks, {
+  resultCanReopenAfterHandoff: inspectResult.tab === '结果明细' && inspectResult.reopened,
+  resultShowsAllRowsAndFields: inspectResult.rows.length === 4 && inspectResult.rows.every(row => row.length === 5),
+  resultShowsDistinctCategoryList: inspectResult.rows.some(row => row.includes('O-1001') && row.includes('A、B')),
+  unmatchedCategoryClearlyEmpty: inspectResult.rows.some(row => row.includes('O-1004') && row.includes('（空）')) && inspectResult.emptyCell,
+  csvContainsFullResult: inspectResult.csv.split('\r\n').length === 5 && inspectResult.csv.includes('A、B') && inspectResult.csv.includes('O-1004'),
+  csvUsesDerivedFileName: inspectResult.fileName === 'join_orders_sample-join_items_sample-joined.csv',
+  resultRestoresAfterReload: restored.rows === 4 && restored.tab === '结果明细' && restored.actions.includes('下载 CSV'),
+  noRuntimeExceptions: runtimeErrors.length === 0,
+});
+console.log(JSON.stringify({ checks, result, inspectResult, restored, runtimeErrors }, null, 2));
 socket.close();
 if (Object.values(checks).some((passed) => !passed)) process.exitCode = 1;

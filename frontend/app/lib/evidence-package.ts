@@ -69,8 +69,10 @@ function scrubCallInput(tool: string, input: Record<string, unknown>) {
   }
   if (Array.isArray(input.aggregateResults)) {
     scrubbed.aggregateResults = input.aggregateResults.slice(0, 100).map((row) => {
-      const aggregate = row as { key?: unknown; value?: unknown };
-      return { key: typeof aggregate?.key === "string" ? aggregate.key : null, value: typeof aggregate?.value === "number" ? aggregate.value : null };
+      const aggregate = row as { key?: unknown; value?: unknown; numerator?: unknown; denominator?: unknown };
+      return { key: typeof aggregate?.key === "string" ? aggregate.key : null, value: typeof aggregate?.value === "number" ? aggregate.value : null,
+        ...(typeof aggregate.numerator === "number" ? { numerator: aggregate.numerator } : {}),
+        ...(typeof aggregate.denominator === "number" ? { denominator: aggregate.denominator } : {}) };
     });
     scrubbed.aggregatesTruncated = Boolean(input.aggregatesTruncated) || input.aggregateResults.length > 100;
   }

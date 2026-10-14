@@ -12,6 +12,7 @@ export type MetricQualityContext = {
   decisionQuestion: string;
   grainConfirmed: boolean;
   additionalScope?: string;
+  groupFields?: string[];
 };
 
 export type QualityImpactItem = {
@@ -67,6 +68,7 @@ export function assessQualityIssueForMetric(issue: QualityIssue, context: Metric
   const isEntity = Boolean(field) && normalized(field) === normalized(context.entityField);
   const isValue = Boolean(field) && normalized(field) === normalized(context.valueField);
   const isTime = Boolean(field) && normalized(field) === normalized(context.timeField);
+  const isGroup = Boolean(field) && context.groupFields?.some(group => normalized(group) === normalized(field));
   const usedByFilter = referencesField(field, context);
   const distinctEntityMetric = context.metricType === "count" || context.metricType === "ratio";
 
@@ -91,6 +93,7 @@ export function assessQualityIssueForMetric(issue: QualityIssue, context: Metric
   }
 
   if (issue.check === "完整性") {
+    if (isGroup) return item(issue, "affecting", `字段 ${field} 是本次分组字段；缺失记录无法归入该分组，不能把它自动分配给某个地区。`, "优先核实补全；无法补全时记录排除数量，或另行定义未知分组。无需因此删除其他字段缺失的订单。", "manual_review");
     if (isEntity) return item(issue, "affecting", `缺失 ${context.entityField} 的记录无法进入去重对象计数。`, "核实缺失记录的业务含义，并在结果中披露排除行数。", "manual_review");
     if (isValue && (context.metricType === "amount" || context.metricType === "average")) {
       return item(issue, "affecting", `缺失 ${context.valueField} 的记录无法参与求和。`, "核实能否补值；不能确认时排除并披露行数。", "manual_review");

@@ -866,3 +866,23 @@ button { cursor:pointer; }
 }
 .scope-restore-button:disabled { opacity: .5; cursor: not-allowed; }
 .scope-restore-button:focus-visible { outline: 2px solid #2563eb; outline-offset: 3px; }
+/* Persistent access to browser-local derived results. */
+.derived-result-actions { display: flex; align-items: center; gap: 10px; margin: 16px 22px; padding: 14px 16px; border: 1px solid #b8e2db; border-radius: 12px; background: #effaf7; color: #12695f; flex-wrap: wrap; }
+.derived-result-actions > div { flex: 1 1 220px; display: grid; gap: 4px; }
+.derived-result-actions span, .dataset-result-note, .dataset-result-heading p { font-size: 12px; line-height: 1.7; color: #687d91; }
+.derived-result-actions button, .dataset-result button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid #b8d6d1; border-radius: 8px; background: white; color: #12695f; padding: 9px 13px; cursor: pointer; font-size: 13px; font-weight: 600; }
+.derived-result-actions button:focus-visible, .dataset-result button:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+.dataset-result { padding: 22px; }
+.dataset-result-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.dataset-result-heading h3 { margin: 0; font-size: 16px; color: #31445e; }
+.dataset-result-heading p { margin: 5px 0 0; overflow-wrap: anywhere; }
+.dataset-result-note { margin: 12px 0; }
+.dataset-result-table-wrap { overflow: auto; max-height: 560px; border: 1px solid #dce5f0; border-radius: 10px; }
+.dataset-result-table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.dataset-result-table th, .dataset-result-table td { padding: 12px 14px; border-bottom: 1px solid #e5edf4; text-align: left; min-width: 100px; max-width: 420px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.dataset-result-table thead th { position: sticky; top: 0; background: #f4f7fb; color: #536881; font-weight: 600; z-index: 1; }
+.dataset-result-table th:first-child { min-width: 60px; }
+.dataset-result-table .empty-cell { color: #8994a5; }
+.dataset-result-pagination { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; margin-top: 14px; font-size: 12px; color: #61748d; }
+.dataset-result button:disabled { opacity: .45; cursor: default; }
+@media (max-width: 640px) { .derived-result-actions { margin: 12px; } .dataset-result { padding: 12px; } .dataset-result-pagination { justify-content: flex-start; } }

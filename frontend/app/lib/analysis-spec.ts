@@ -1,4 +1,5 @@
 import type { BusinessAnalysisConfig } from "./business-analysis";
+import { ratioConditionLabel } from "./business-analysis.ts";
 import type { MetricContract } from "./metric-contract";
 import type { FilterRule } from "./metric-execution";
 import type { CellValue, DatasetProfile } from "./tabular-profile";
@@ -178,22 +179,22 @@ export function analysisSpecFromBusinessConfig(
     sources: [sourceFromVersion(version, primary)],
     entityTable: primary,
     entityField: config.entityField,
-    valueTable: config.aggregation === "count_distinct" ? null : primary,
-    valueField: config.aggregation === "count_distinct" ? null : config.valueField,
+    valueTable: ["count_distinct", "ratio"].includes(config.aggregation) ? null : primary,
+    valueField: ["count_distinct", "ratio"].includes(config.aggregation) ? null : config.valueField,
     groupBy: config.analysisType === "trend" ? [] : [{ table: primary, field: config.groupField }],
     timeField: config.analysisType === "trend" ? { table: primary, field: config.timeField } : null,
     timeGrain: config.analysisType === "trend" ? config.timeGrain : null,
-    filters: [],
-    numerator: null,
-    denominator: null,
+    filters: config.aggregation === "ratio" && config.ratioDenominator?.enabled ? [{ ...config.ratioDenominator }] : [],
+    numerator: config.aggregation === "ratio" ? { description: `每组范围内满足 ${ratioConditionLabel(config.ratioNumerator)} 的去重 ${config.entityField} 数`, filter: config.ratioNumerator ? { ...config.ratioNumerator } : null } : null,
+    denominator: config.aggregation === "ratio" ? { description: `每组满足 ${ratioConditionLabel(config.ratioDenominator)} 的去重 ${config.entityField} 数`, filter: config.ratioDenominator?.enabled ? { ...config.ratioDenominator } : null } : null,
     sort: config.analysisType === "trend"
       ? { field: "time", direction: "asc" }
       : { field: "value", direction: config.sortDirection },
     limit: config.analysisType === "top_n" ? config.limit : null,
     grainDescription: profile.grainSuggestion,
-    amountScope: config.aggregation === "count_distinct" ? null : `使用数值字段“${config.valueField}”进行${config.aggregation === "sum" ? "求和" : "平均值"}计算`,
-    assumptions: [],
-    unresolvedQuestions: [],
+    amountScope: ["count_distinct", "ratio"].includes(config.aggregation) ? null : `使用数值字段“${config.valueField}”进行${config.aggregation === "sum" ? "求和" : "平均值"}计算`,
+    assumptions: config.aggregation === "ratio" ? ["同一编号只计一次；同一订单的地区或成功条件冲突时阻止计算；空编号不计入分子分母，分母为零的组不显示为0%。"] : [],
+    unresolvedQuestions: config.aggregation === "ratio" && (!config.ratioNumerator?.enabled || !config.ratioNumerator.field || (config.ratioNumerator.operator !== "not_empty" && !config.ratioNumerator.value.trim())) ? ["分子条件未确认"] : [],
     status: "confirmed",
   };
 }

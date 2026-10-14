@@ -6,6 +6,7 @@ import {
   applyCleaningPlan, CleaningReceipt, profileAsCsv,
 } from "../lib/data-cleaning";
 import type { DatasetProfile } from "../lib/tabular-profile";
+import type { QualityImpactSummary } from "../lib/quality-impact";
 
 type Props = {
   profile: DatasetProfile;
@@ -16,18 +17,37 @@ type Props = {
   onRestore: () => void;
   onSkip: () => void;
   nextLabel?: string;
+  qualityImpact?: QualityImpactSummary | null;
+  entityField?: string;
+  scopeConfirmed?: boolean;
+  analysisQuestion?: string;
 };
 
 export default function DataCleaning({
-  profile, originalProfile, decisions, receipt, onApply, onRestore, onSkip, nextLabel = "指标口径",
+  profile, originalProfile, decisions, receipt, onApply, onRestore, onSkip, nextLabel = "指标口径", qualityImpact, entityField, scopeConfirmed = false, analysisQuestion = "",
 }: Props) {
   const repairableIssues = profile.qualityIssues.filter((issue) => issue.supportedRepair);
   const reviewOnlyIssues = profile.qualityIssues.filter((issue) => !issue.supportedRepair);
-  const [selectedIds, setSelectedIds] = useState<string[]>(() =>
-    repairableIssues.filter((issue) => decisions[issue.id] === "approved").map((issue) => issue.id),
-  );
-  const [confirmed, setConfirmed] = useState(false);
-  const [error, setError] = useState("");
+  const defaultSelectedIds = repairableIssues
+    .filter((issue) => decisions[issue.id] === "approved" && qualityImpact?.items.find(item => item.issueId === issue.id)?.level !== "unrelated")
+    .map((issue) => issue.id);
+  const reviewScope = JSON.stringify([
+    profile.fileName,
+    profile.fileSize,
+    profile.rowCount,
+    profile.columnCount,
+    profile.qualityIssues.map(issue => [issue.id, issue.supportedRepair]),
+    analysisQuestion,
+    entityField,
+    qualityImpact?.items.map(item => [item.issueId, item.level]),
+  ]);
+  const [selection, setSelection] = useState<{ scope: string; ids: string[] }>(() => ({ scope: reviewScope, ids: defaultSelectedIds }));
+  const selectedIds = selection.scope === reviewScope ? selection.ids : defaultSelectedIds;
+  const selectionKey = selectedIds.join("\u001f");
+  const [confirmation, setConfirmation] = useState<{ scope: string; selectionKey: string } | null>(null);
+  const confirmed = confirmation?.scope === reviewScope && confirmation.selectionKey === selectionKey;
+  const [errorState, setErrorState] = useState<{ scope: string; message: string } | null>(null);
+  const error = errorState?.scope === reviewScope ? errorState.message : "";
   const preview = useMemo(() => {
     if (selectedIds.length === 0) return null;
     try {
@@ -38,13 +58,20 @@ export default function DataCleaning({
   }, [profile, selectedIds]);
   const skippedOutlierRecheck = preview?.cleanedProfile.qualityChecksSkipped
     .filter((item) => item.check === "异常值") ?? [];
-
+  const impactById = new Map(qualityImpact?.items.map(item => [item.issueId, item]) ?? []);
+  const selectedUnrelated = selectedIds.map(id => impactById.get(id)).filter(item => item?.level === "unrelated");
+  const excludedDefaults = repairableIssues.filter(issue => decisions[issue.id] === "approved" && impactById.get(issue.id)?.level === "unrelated");
+  const beforeEntities = profile.columns.find(column => column.name === entityField)?.uniqueCount;
+  const afterEntities = preview?.cleanedProfile.columns.find(column => column.name === entityField)?.uniqueCount ?? beforeEntities;
   function toggleIssue(issueId: string) {
-    setSelectedIds((current) => current.includes(issueId)
-      ? current.filter((id) => id !== issueId)
-      : [...current, issueId]);
-    setConfirmed(false);
-    setError("");
+    setSelection({
+      scope: reviewScope,
+      ids: selectedIds.includes(issueId)
+        ? selectedIds.filter((id) => id !== issueId)
+        : [...selectedIds, issueId],
+    });
+    setConfirmation(null);
+    setErrorState(null);
   }
 
   function applyPlan() {
@@ -53,7 +80,7 @@ export default function DataCleaning({
       const result = applyCleaningPlan(profile, selectedIds);
       onApply(result.cleanedProfile, result.receipt);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "清洗方案无法执行。");
+      setErrorState({ scope: reviewScope, message: caught instanceof Error ? caught.message : "清洗方案无法执行。" });
     }
   }
 
@@ -74,18 +101,18 @@ export default function DataCleaning({
         <div>
           <span>清洗方案与二次确认</span>
           <h3>先预览影响，再生成派生副本</h3>
-          <p>这里只执行可解释、可复核的规则。异常值和疑似主键重复不会被自动删除，原始文件始终保留。</p>
+          <p>先看问题是否影响当前指标，再决定处理。通用建议不是必选项；格式转换或核实补全应优先于删行。这里只提供下面列出的删行规则，原始文件始终保留。</p>
         </div>
         <div className="cleaning-flow"><span className="done">检查</span><span className="active">确认</span><span>副本</span><span>复检</span></div>
       </div>
 
-      {!receipt && selectedIds.length === 0 && (
+      {!receipt && (
         <section className="cleaning-skip-guide" role="status">
           <div>
             <Check size={16} />
-            <span><strong>当前没有批准任何自动清洗规则</strong><small>“确认已核实”只记录字段粒度或异常解释，不代表授权删除数据。你可以继续确认原分析任务。</small></span>
+            <span><strong>{selectedIds.length ? "你仍可以保留当前数据" : "当前未选择执行清洗规则"}</strong><small>质量检查需要记录判断；是否删行取决于当前指标。此入口会把已批准的可执行清洗项改为保留原样，并继续确认原分析任务。</small></span>
           </div>
-          <button type="button" onClick={onSkip}>跳过清洗，进入{nextLabel}<ChevronRight size={14} /></button>
+          <button type="button" onClick={onSkip}>保留当前数据，进入{nextLabel}<ChevronRight size={14} /></button>
         </section>
       )}
 
@@ -110,12 +137,14 @@ export default function DataCleaning({
 
       {repairableIssues.length > 0 ? (
         <section className="cleaning-options">
-          <div className="cleaning-section-heading"><strong>1. 选择可执行规则</strong><span>默认只勾选你在质量检查中批准的项目</span></div>
+          <div className="cleaning-section-heading"><strong>1. 选择可执行规则</strong><span>已批准且与当前口径有关的规则才默认勾选</span></div>
+          {excludedDefaults.length > 0 && <p className="cleaning-preview-warning" role="status"><AlertCircle size={14} />{excludedDefaults.length} 项已批准规则按当前{scopeConfirmed ? "口径" : "候选口径"}可保留，本页未默认勾选。请核对字段与业务目的后决定。</p>}
           {repairableIssues.map((issue) => (
             <label className="cleaning-option" key={issue.id}>
               <input type="checkbox" checked={selectedIds.includes(issue.id)} onChange={() => toggleIssue(issue.id)} />
               <span>
                 <strong>{issue.title}</strong>
+                {impactById.get(issue.id) && <small><span className={`quality-impact-badge ${impactById.get(issue.id)!.level}`}>{impactById.get(issue.id)!.label}</span> {impactById.get(issue.id)!.reason}</small>}
                 <small>{issue.supportedRepair === "deduplicate_exact"
                   ? "移除完全重复副本，保留首次出现的记录"
                   : issue.supportedRepair === "drop_missing"
@@ -145,15 +174,18 @@ export default function DataCleaning({
             <div><span>预计移除</span><strong>{preview?.receipt.removedRows ?? 0} 行</strong></div>
             <div><span>副本结果</span><strong>{preview?.receipt.resultRows ?? profile.rowCount} 行</strong></div>
             <div><span>预计发现问题</span><strong>{profile.qualityIssues.length} → {preview?.cleanedProfile.qualityIssues.length ?? profile.qualityIssues.length}</strong></div>
+            {beforeEntities !== undefined && <div><span>{entityField} 非空去重数量</span><strong>{beforeEntities} → {afterEntities}</strong></div>}
           </div>
+          {selectedUnrelated.length > 0 && <p className="cleaning-preview-warning" role="alert"><AlertCircle size={14} />已选 {selectedUnrelated.length} 项按当前口径可保留的删行规则。它们可能删除仍可参与统计的订单；例如客户编号缺失或日期无法识别，不一定影响不含时间筛选的订单成功率。</p>}
+          {preview && <p className="cleaning-preview-warning" role="status"><AlertCircle size={14} />删行会改变“全部订单”的范围。问题数减少不等于答案更可靠；请核对业务对象数量及分子分母，而不只看剩余行数。</p>}
           {skippedOutlierRecheck.length > 0 && (
             <div className="cleaning-preview-warning" role="status">
               <AlertCircle size={14} />清洗后“{skippedOutlierRecheck.map((item) => item.field).join("、")}”的 IQR 异常检查将不运行；问题数减少不代表异常值已解决。
             </div>
           )}
           <label className="cleaning-second-confirm">
-            <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
-            <span><ShieldCheck size={15} /><strong>我确认按以上规则生成新的 CSV 派生副本，不覆盖“{originalProfile.fileName}”。</strong></span>
+            <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmation(event.target.checked ? { scope: reviewScope, selectionKey } : null)} />
+            <span><ShieldCheck size={15} /><strong>我确认这些处理适合当前分析；预计移除 {preview?.receipt.removedRows ?? 0} 行，后续统计使用清洗后的范围，并生成副本保留“{originalProfile.fileName}”。</strong></span>
           </label>
           {error && <div className="cleaning-error"><AlertCircle size={15} />{error}</div>}
           <div className="cleaning-submit-row">

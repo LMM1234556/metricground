@@ -4,6 +4,7 @@ import type { BusinessAnalysisConfig, BusinessAnalysisResult } from "./business-
 import type { ExecutionConfig, ExecutionResult, FilterRule } from "./metric-execution";
 import type { MetricContract } from "./metric-contract";
 import type { CellValue, DatasetProfile } from "./tabular-profile";
+import { buildBusinessRatioSql } from "./business-ratio-sql.ts";
 import {
   approximatelyEqual,
   verificationPassed,
@@ -320,13 +321,15 @@ function timeKeyExpression(field: string, grain: BusinessAnalysisConfig["timeGra
 }
 
 type BusinessReference = {
-  rows: Array<{ key: string; value: number; sourceRows: number; distinctEntities: number; excludedInvalidValues: number }>;
+  rows: Array<{ key: string; value: number; sourceRows: number; distinctEntities: number; excludedInvalidValues: number; numerator?: number; denominator?: number }>;
   sourceRows: number;
   eligibleRows: number;
   excludedGroupingRows: number;
   excludedMissingEntities: number;
   excludedInvalidValues: number;
   fullGroupCount: number;
+  excludedScopeRows?: number;
+  zeroDenominatorGroups?: string[];
 };
 
 function businessChecks(primary: BusinessAnalysisResult, reference: BusinessReference): IndependentVerificationCheck[] {
@@ -334,14 +337,16 @@ function businessChecks(primary: BusinessAnalysisResult, reference: BusinessRefe
     const other = reference.rows[index];
     return other && row.key === other.key && approximatelyEqual(row.value, other.value)
       && row.sourceRows === other.sourceRows && row.distinctEntities === other.distinctEntities
-      && row.excludedInvalidValues === other.excludedInvalidValues;
+      && row.excludedInvalidValues === other.excludedInvalidValues
+      && row.numerator === other.numerator && row.denominator === other.denominator;
   });
   return [
     { label: "DuckDB 分组结果一致", passed: sameRows, detail: `主引擎 ${primary.rows.length} 行；DuckDB ${reference.rows.length} 行。` },
     {
       label: "DuckDB 行数勾稽一致",
       passed: primary.sourceRows === reference.sourceRows && primary.eligibleRows === reference.eligibleRows
-        && primary.excludedGroupingRows === reference.excludedGroupingRows,
+        && primary.excludedGroupingRows === reference.excludedGroupingRows
+        && (primary.excludedScopeRows ?? 0) === (reference.excludedScopeRows ?? 0),
       detail: `源行 ${primary.sourceRows}/${reference.sourceRows}，进入分组 ${primary.eligibleRows}/${reference.eligibleRows}，排除 ${primary.excludedGroupingRows}/${reference.excludedGroupingRows}。`,
     },
     {
@@ -350,7 +355,8 @@ function businessChecks(primary: BusinessAnalysisResult, reference: BusinessRefe
         && primary.excludedInvalidValues === reference.excludedInvalidValues,
       detail: `缺失对象 ${primary.excludedMissingEntities}/${reference.excludedMissingEntities}，无效数值 ${primary.excludedInvalidValues}/${reference.excludedInvalidValues}。`,
     },
-    { label: "DuckDB 结果边界一致", passed: primary.fullGroupCount === reference.fullGroupCount, detail: `完整分组 ${primary.fullGroupCount}/${reference.fullGroupCount}。` },
+    { label: "DuckDB 结果边界一致", passed: primary.fullGroupCount === reference.fullGroupCount
+      && JSON.stringify([...(primary.zeroDenominatorGroups ?? [])].sort()) === JSON.stringify([...(reference.zeroDenominatorGroups ?? [])].sort()), detail: `完整分组 ${primary.fullGroupCount}/${reference.fullGroupCount}；比例分母为零的组独立对账。` },
   ];
 }
 
@@ -362,7 +368,40 @@ export async function verifyBusinessAnalysisWithDuckDB(
   const startedAt = performance.now();
   const version = createDatasetVersion(profile);
   let query = "";
+  let queryParameters: Array<string | number> = [];
   try {
+    if (config.aggregation === "ratio") {
+      const sql = buildBusinessRatioSql(config);
+      queryParameters = [...sql.parameters, ...sql.parameters, ...sql.parameters, ...sql.parameters];
+      // Record all independently executed statements and their parameter ordering.
+      query = [sql.rows, sql.summary, sql.zero, sql.conflicts].join("\n\n");
+      const reference = await withVerificationTable(profile, async (connection, tableName) => {
+        const run = async (queryText: string) => {
+          const statement = await connection.prepare(queryText.replaceAll('"__TABLE__"', quoteIdentifier(tableName)));
+          try { return rowsFromArrow<Record<string, unknown>>(await statement.query(...sql.parameters)); }
+          finally { await statement.close(); }
+        };
+        const conflicts = await run(sql.conflicts);
+        if (conflicts.length) throw new Error("独立复核发现同一订单的地区或成功状态冲突，已阻止完成。");
+        const data = await run(sql.rows);
+        const summary = (await run(sql.summary))[0];
+        const zero = await run(sql.zero);
+        return {
+          rows: data.map(row => ({ key: String(row.analysis_key), value: numberValue(row.metric_value) ?? Number.NaN,
+            sourceRows: numberValue(row.source_rows) ?? 0, distinctEntities: numberValue(row.distinct_entities) ?? 0,
+            excludedInvalidValues: 0, numerator: numberValue(row.numerator) ?? 0, denominator: numberValue(row.denominator) ?? 0 })),
+          sourceRows: numberValue(summary.source_rows) ?? 0, eligibleRows: numberValue(summary.eligible_rows) ?? 0,
+          excludedGroupingRows: numberValue(summary.excluded_grouping_rows) ?? 0, excludedScopeRows: numberValue(summary.excluded_scope_rows) ?? 0,
+          excludedMissingEntities: numberValue(summary.excluded_missing_entities) ?? 0, excludedInvalidValues: 0,
+          fullGroupCount: numberValue(summary.full_group_count) ?? 0, zeroDenominatorGroups: zero.map(row => String(row.analysis_key)),
+        } satisfies BusinessReference;
+      });
+      const checks = businessChecks(primary, reference);
+      return { engine: "duckdb-wasm", engineVersion: DUCKDB_WASM_VERSION, status: verificationPassed(checks) ? "passed" : "failed",
+        datasetVersionId: version.versionId, durationMs: Math.round(performance.now() - startedAt), query,
+        queryParameters, checks,
+        referenceValue: null, referenceRows: reference.rows.map(row => ({ key: row.key, value: row.value, numerator: row.numerator, denominator: row.denominator })), error: null };
+    }
     const key = config.analysisType === "trend"
       ? timeKeyExpression(config.timeField, config.timeGrain)
       : `NULLIF(TRIM(CAST(${quoteIdentifier(config.groupField)} AS VARCHAR)), '')`;
@@ -434,7 +473,7 @@ export async function verifyBusinessAnalysisWithDuckDB(
       datasetVersionId: version.versionId,
       durationMs: Math.round(performance.now() - startedAt),
       query,
-      queryParameters: [],
+      queryParameters,
       checks,
       referenceValue: null,
       referenceRows: reference.rows.map((row) => ({ key: row.key, value: row.value })),
@@ -448,7 +487,7 @@ export async function verifyBusinessAnalysisWithDuckDB(
       datasetVersionId: version.versionId,
       durationMs: Math.round(performance.now() - startedAt),
       query,
-      queryParameters: [],
+      queryParameters,
       checks: [],
       referenceValue: null,
       referenceRows: [],

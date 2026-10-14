@@ -22,8 +22,8 @@ export function analysisGoalErrors(question: string, spec: Pick<AnalysisSpec, "a
   if (isRatioQuestion(question) && spec.aggregation !== "ratio") {
     errors.push("原问题要求比例/成功率，当前公式却不是比例。不能用计数、金额合计或平均值替代；需要确认分子和分母。");
   }
-  if (isRatioQuestion(question) && spec.groupBy.length > 0) {
-    errors.push("当前版本尚不支持按分组计算比例指标；已阻止替代计算。请保留原问题，等待分组比例能力，或开始新的分析。");
+  if (spec.aggregation === "ratio" && ["trend", "top_n"].includes(spec.analysisType)) {
+    errors.push("当前比例指标支持整体或分组比较；时间趋势和 Top N 比例暂不支持。");
   }
   if (isDistinctCountQuestion(question) && spec.aggregation !== "count_distinct") {
     errors.push("原问题要求不同业务对象数量，必须按确认的编号去重计数。");

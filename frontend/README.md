@@ -12,6 +12,9 @@
 - 导出不含原始明细行的 Agent 证据包；
 - 模型只接收字段画像和质量摘要，最终数字由白名单确定性工具计算。
 - 关键结果必须再通过 DuckDB-WASM 独立复算；引擎版本、数据版本、SQL 和逐项勾稽进入 TaskRun 证据。
+- v0.3.14 支持分组去重对象比例：逐组确认分子状态和分母范围，结果同时展示百分比、分子和分母，独立 SQL 复核及导出保留这三项；同一编号的分组/成功条件冲突会阻止执行。
+- v0.3.15 将质量相关性判断接入经营分析，区分候选字段与已确认口径。清洗页不默认勾选与当前口径无关的规则，预览去重对象数量变化，并提供明确的保留当前数据入口；此入口撤回尚未执行的删行批准。
+- 分组比例目前限于文本状态的等于、不等于或非空条件；不支持比例趋势、比例 Top N 或通用聚合量之比。分母为零的组提示无法计算，空编号及空分组分别计数。
 
 ## 尚未完成
 
@@ -53,15 +56,20 @@ npm run lint
 npm run build
 npm run test:core
 npm run test:quality
+npm run test:cleaning-guidance
 npm run test:cleaning
 npm run test:metric
 npm run test:execution
 npm run test:analysis
+npm run test:group-ratio
+npm run test:group-ratio:sql
+npm run test:group-ratio:markup
 npm run test:analysis:e2e
 npm run test:join
 npm run test:join:e2e
 npm run test:join:reconciliation
 npm run test:join:three-table
+npm run test:dataset-result
 npm run test:agent:runtime
 npm run test:evidence
 npm run test:scenarios

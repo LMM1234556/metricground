@@ -117,9 +117,10 @@ assert.equal(missingRankMeasure.action, "clarify");
 assert.equal(missingRankMeasure.fieldBindings.valueField, null);
 
 const groupedRate = await plan("比较不同地区的送货成功率");
-assert.equal(groupedRate.action, "unsupported");
-assert(!groupedRate.tools.includes("execute_group_compare"));
-assert(groupedRate.clarification.includes("分子和分母"));
+assert.equal(groupedRate.action, "clarify");
+assert.equal(groupedRate.nextView, "经营分析");
+assert.equal(groupedRate.fieldBindings.valueField, null);
+assert(groupedRate.clarification.includes("分母范围"));
 const join = await plan("商品品类补到订单信息", { ...dataset, relatedTables: [{ fileName: "items.csv", rowCount: 4, fields: ["order_id", "category"] }] });
 assert.equal(join.analysisType, "join");
 assert.equal(join.action, "clarify");

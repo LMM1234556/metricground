@@ -1,10 +1,12 @@
 import { isDistinctCountQuestion, isRankingQuestion, type AgentPlan } from "./agent-plan.ts";
 import type { CellValue, DatasetProfile } from "./tabular-profile";
 import type { IndependentVerification } from "./independent-verification";
-import { analysisGoalErrors } from "./analysis-goal-guard.ts";
+import { analysisGoalErrors, isRatioQuestion } from "./analysis-goal-guard.ts";
+import type { FilterRule } from "./metric-execution";
+import { buildBusinessRatioSql } from "./business-ratio-sql.ts";
 
 export type BusinessAnalysisType = "group_compare" | "trend" | "top_n";
-export type BusinessAggregation = "count_distinct" | "sum" | "average";
+export type BusinessAggregation = "count_distinct" | "sum" | "average" | "ratio";
 export type TimeGrain = "day" | "week" | "month" | "quarter";
 export type SortDirection = "desc" | "asc";
 
@@ -18,6 +20,8 @@ export type BusinessAnalysisConfig = {
   timeGrain: TimeGrain;
   limit: number;
   sortDirection: SortDirection;
+  ratioNumerator?: FilterRule;
+  ratioDenominator?: FilterRule;
 };
 
 export type BusinessAnalysisPlan = {
@@ -40,6 +44,8 @@ export type BusinessAnalysisRow = {
   sourceRows: number;
   distinctEntities: number;
   excludedInvalidValues: number;
+  numerator?: number;
+  denominator?: number;
 };
 
 export type BusinessAnalysisResult = {
@@ -50,6 +56,8 @@ export type BusinessAnalysisResult = {
   excludedMissingEntities: number;
   excludedInvalidValues: number;
   fullGroupCount: number;
+  excludedScopeRows?: number;
+  zeroDenominatorGroups?: string[];
   checks: BusinessAnalysisCheck[];
   warnings: string[];
   engine: "browser-deterministic";
@@ -66,6 +74,7 @@ export const AGGREGATIONS: Array<{ value: BusinessAggregation; label: string }> 
   { value: "count_distinct", label: "去重计数" },
   { value: "sum", label: "数值求和" },
   { value: "average", label: "按去重对象平均" },
+  { value: "ratio", label: "去重对象比例 / 成功率" },
 ];
 
 function isMissing(value: CellValue | undefined) {
@@ -143,6 +152,7 @@ function escapeIdentifier(identifier: string) {
 }
 
 function inferAggregation(question: string): BusinessAggregation {
+  if (isRatioQuestion(question)) return "ratio";
   if (/平均|均值|客单价|人均/i.test(question)) return "average";
   if (isDistinctCountQuestion(question)) return "count_distinct";
   if (/数量|个数|订单|客户|用户|商品数|去重/i.test(question) && !/金额|销售额|gmv|收入|营收/i.test(question)) return "count_distinct";
@@ -164,7 +174,8 @@ export function createBusinessAnalysisConfig(
   question = "",
 ): BusinessAnalysisConfig {
   const fieldExists = (field: string | null | undefined) => field && profile.columns.some((column) => column.name === field) ? field : "";
-  const entity = fieldExists(plan?.fieldBindings.entityField)
+  const entity = (isRatioQuestion(question) ? profile.columns.find(column => /^(?:.*\.)?order_id$|订单(?:编号|号)/i.test(column.name))?.name : "")
+    || fieldExists(plan?.fieldBindings.entityField)
     || (!plan ? profile.columns.find((column) => column.isCandidateKey)?.name : "")
     || (!plan ? profile.columns[0]?.name : "")
     || "";
@@ -190,12 +201,37 @@ export function createBusinessAnalysisConfig(
     timeGrain: /季度|按季/i.test(question) ? "quarter" : /按周|周度/i.test(question) ? "week" : /按日|每日|日度/i.test(question) ? "day" : "month",
     limit: inferTopN(question),
     sortDirection: /最低|最少|最小|倒数/i.test(question) ? "asc" : "desc",
+    ratioNumerator: { enabled: true, field: profile.columns.find(column => /^(?:.*\.)?(?:order_)?status$|状态/i.test(column.name))?.name ?? "", operator: "equals", value: "" },
+    ratioDenominator: { enabled: false, field: "", operator: "not_equals", value: "" },
   };
+}
+
+export function ratioConditionLabel(rule: FilterRule | undefined) {
+  if (!rule?.enabled) return "全部状态";
+  return `${rule.field} ${rule.operator === "equals" ? "等于" : rule.operator === "not_equals" ? "不等于" : "非空"}${rule.operator === "not_empty" ? "" : ` ${rule.value}`}`;
+}
+
+function matchesRatioRule(record: Record<string, CellValue>, rule: FilterRule | undefined) {
+  if (!rule?.enabled) return true;
+  const value = stableValue(record[rule.field]);
+  if (rule.operator === "not_empty") return value !== null;
+  if (value === null) return false;
+  return rule.operator === "equals" ? value.toLowerCase() === rule.value.trim().toLowerCase()
+    : value.toLowerCase() !== rule.value.trim().toLowerCase();
+}
+
+// Ratio filters are deliberately categorical; values stay in parameters.
+function ratioConditionSql(rule: FilterRule | undefined, parameter: string) {
+  if (!rule?.enabled) return "1 = 1";
+  const field = escapeIdentifier(rule.field);
+  if (rule.operator === "not_empty") return `${field} IS NOT NULL AND TRIM(CAST(${field} AS CHAR)) <> ''`;
+  return `LOWER(TRIM(CAST(${field} AS CHAR))) ${rule.operator === "equals" ? "=" : "<>"} LOWER(${parameter})`;
 }
 
 function aggregationSql(config: BusinessAnalysisConfig) {
   const entity = escapeIdentifier(config.entityField);
   if (config.aggregation === "count_distinct") return `COUNT(DISTINCT ${entity})`;
+  if (config.aggregation === "ratio") return `1.0 * COUNT(DISTINCT CASE WHEN ${ratioConditionSql(config.ratioNumerator, ":numerator_value")} THEN ${entity} END) / NULLIF(COUNT(DISTINCT ${entity}), 0)`;
   const value = escapeIdentifier(config.valueField);
   const numeric = `CASE WHEN TRIM(CAST(${value} AS CHAR)) REGEXP '^-?([0-9]+([.][0-9]*)?|[.][0-9]+)$' THEN CAST(${value} AS DECIMAL(18, 4)) END`;
   if (config.aggregation === "sum") return `SUM(${numeric})`;
@@ -216,7 +252,20 @@ export function buildBusinessAnalysisPlan(profile: DatasetProfile, config: Busin
   errors.push(...analysisGoalErrors(question, { analysisType: config.analysisType, aggregation: config.aggregation, entityField: config.entityField,
     groupBy: config.analysisType === "trend" ? [] : [{ table: "primary", field: config.groupField }] }));
   if (!config.entityField || !names.has(config.entityField)) errors.push("请选择当前数据中真实存在的统计对象字段");
-  if (config.aggregation !== "count_distinct" && (!config.valueField || !names.has(config.valueField))) errors.push("求和或平均分析必须选择数值字段");
+  if (["sum", "average"].includes(config.aggregation) && (!config.valueField || !names.has(config.valueField))) errors.push("求和或平均分析必须选择数值字段");
+  if (config.aggregation === "ratio") {
+    if (config.analysisType !== "group_compare") errors.push("比例指标当前支持分组比较，请选择分组比较");
+    for (const [label, rule] of [["分子", config.ratioNumerator], ["分母", config.ratioDenominator]] as const) {
+      if (label === "分子" && !rule?.enabled) errors.push("请指定分子条件");
+      if (rule?.enabled) {
+        if (!names.has(rule.field)) errors.push(`${label}条件必须选择真实字段`);
+        if (!["equals", "not_equals", "not_empty"].includes(rule.operator)) errors.push(`${label}仅支持等于、不等于或非空条件`);
+        if (rule.operator !== "not_empty" && !rule.value.trim()) errors.push(`请确认${label}的比较值`);
+        // Restrict to text categories so the native and SQL comparisons have identical semantics.
+        if (profile.records.some(record => stableValue(record[rule.field]) !== null && typeof record[rule.field] !== "string")) errors.push(`${label}条件当前仅支持文本状态字段`);
+      }
+    }
+  }
   if (config.analysisType === "trend" && (!config.timeField || !names.has(config.timeField))) errors.push("趋势分析必须选择时间字段");
   if (config.analysisType !== "trend" && (!config.groupField || !names.has(config.groupField))) errors.push("分组比较或 Top N 必须选择分组字段");
   if (config.analysisType === "top_n" && (!Number.isInteger(config.limit) || config.limit < 1 || config.limit > 50)) errors.push("Top N 必须是 1 至 50 的整数");
@@ -234,7 +283,7 @@ export function buildBusinessAnalysisPlan(profile: DatasetProfile, config: Busin
     `SELECT ${groupExpression} AS analysis_key,`,
     `       ${aggregationSql(config)} AS metric_value`,
     "FROM uploaded_data",
-    `WHERE ${key} IS NOT NULL`,
+    `WHERE ${key} IS NOT NULL${config.aggregation === "ratio" ? ` AND (${ratioConditionSql(config.ratioDenominator, ":denominator_value")})` : ""}`,
     "GROUP BY analysis_key",
     `ORDER BY ${config.analysisType === "trend" ? "analysis_key ASC" : `metric_value ${config.sortDirection.toUpperCase()}`}${limit};`,
   ].join("\n");
@@ -246,7 +295,7 @@ export function buildBusinessAnalysisPlan(profile: DatasetProfile, config: Busin
     "",
     "base = df.copy()  # df 来自当前上传文件",
     keyCode,
-    config.aggregation === "count_distinct" ? "" : `base[${JSON.stringify(config.valueField)}] = pd.to_numeric(base[${JSON.stringify(config.valueField)}], errors='coerce')`,
+    ["count_distinct", "ratio"].includes(config.aggregation) ? "" : `base[${JSON.stringify(config.valueField)}] = pd.to_numeric(base[${JSON.stringify(config.valueField)}], errors='coerce')`,
     `result = (base${pandasAggregation(config)}`,
     `  .sort_values(ascending=${config.analysisType === "trend" || config.sortDirection === "asc" ? "True" : "False"})${config.analysisType === "top_n" ? `.head(${config.limit})` : ""})`,
   ].filter(Boolean).join("\n");
@@ -260,11 +309,11 @@ export function buildBusinessAnalysisPlan(profile: DatasetProfile, config: Busin
       `读取 ${profile.fileName} 的 ${profile.rowCount.toLocaleString("zh-CN")} 行记录，不修改源文件`,
       `按 ${config.entityField || "待选择字段"} 核对统计对象和去重粒度`,
       `${analysisLabel}，使用“${AGGREGATIONS.find((item) => item.value === config.aggregation)?.label}”口径`,
-      "排除空分组、无效日期或不可转换数值并记录数量",
+      config.aggregation === "ratio" ? `分子：${ratioConditionLabel(config.ratioNumerator)}；分母范围：${ratioConditionLabel(config.ratioDenominator)}；按编号去重，排除空地区与空编号，核实订单状态冲突` : "排除空分组、无效日期或不可转换数值并记录数量",
       "验证结果有限性、排序与行数勾稽，并使用 DuckDB-WASM 独立复算",
     ],
-    sql,
-    pandas,
+    sql: config.aggregation === "ratio" ? `-- 使用与复核相同的规范化表：文本去首尾空白，空值及 null/undefined/__null__ 归为 NULL\n-- 参数按顺序绑定：${JSON.stringify(buildBusinessRatioSql(config).parameters)}\n${buildBusinessRatioSql(config).rows}` : sql,
+    pandas: config.aggregation === "ratio" ? ratioPandas(config) : pandas,
   };
 }
 
@@ -275,7 +324,35 @@ type Accumulator = {
   sum: number;
   validValues: number;
   invalidValues: number;
+  successfulEntities: Set<string>;
 };
+
+function ratioPandas(config: BusinessAnalysisConfig) {
+  const predicate = (rule: FilterRule | undefined, frame: string, value: string) => {
+    if (!rule?.enabled) return frame;
+    const col = `${frame}[${JSON.stringify(rule.field)}].astype('string').str.strip().str.lower()`;
+    if (rule.operator === "not_empty") return `${frame}[${col}.notna() & ~${col}.isin(['', 'null', 'undefined', '__null__'])]`;
+    return `${frame}[${col}.${rule.operator === "not_equals" ? "ne" : "eq"}(${value}.strip().lower()).fillna(False)]`;
+  };
+  return ["import pandas as pd", "# 筛选值作为变量传入；缺失编号和空地区不计入",
+    "df = df.copy()",
+    `for field in ${JSON.stringify([...new Set([config.groupField, config.entityField, config.ratioNumerator?.field, config.ratioDenominator?.enabled ? config.ratioDenominator.field : null].filter(Boolean))])}:`,
+    "    col = df[field].astype('string').str.strip()",
+    "    df[field] = col.mask(col.str.lower().isin(['', 'null', 'undefined', '__null__']))",
+    `base = ${predicate(config.ratioDenominator, "df", "denominator_value")}`,
+    `base = base.assign(_key=base[${JSON.stringify(config.groupField)}].astype('string').str.strip(), _entity=base[${JSON.stringify(config.entityField)}].astype('string').str.strip())`,
+    "base = base[base['_key'].notna() & base['_key'].ne('') & base['_entity'].notna() & base['_entity'].ne('')]",
+    `base['_success'] = False`,
+    `base.loc[${predicate(config.ratioNumerator, "base", "numerator_value")}.index, '_success'] = True`,
+    "conflicts = base.groupby('_entity')[['_key', '_success']].nunique()",
+    "if (conflicts > 1).any().any(): raise ValueError('同一订单的地区或成功状态冲突')",
+    "denominator = base.groupby('_key')['_entity'].nunique()",
+    `numerator = ${predicate(config.ratioNumerator, "base", "numerator_value")}.groupby('_key')['_entity'].nunique()`,
+    "result = pd.DataFrame({'numerator': numerator.reindex(denominator.index, fill_value=0), 'denominator': denominator})",
+    "result['rate'] = result['numerator'] / result['denominator'].replace(0, float('nan'))",
+    `result = result.sort_values('rate', ascending=${config.sortDirection === "asc" ? "True" : "False"})`,
+  ].join("\n");
+}
 
 export function executeBusinessAnalysis(profile: DatasetProfile, config: BusinessAnalysisConfig, question = ""): BusinessAnalysisResult {
   const plan = buildBusinessAnalysisPlan(profile, config, question);
@@ -285,8 +362,14 @@ export function executeBusinessAnalysis(profile: DatasetProfile, config: Busines
   let excludedGroupingRows = 0;
   let excludedMissingEntities = 0;
   let excludedInvalidValues = 0;
+  let excludedScopeRows = 0;
+  const ratioEntities = new Map<string, { key: string; success: boolean }>();
 
   for (const record of profile.records) {
+    if (config.aggregation === "ratio" && !matchesRatioRule(record, config.ratioDenominator)) {
+      excludedScopeRows += 1;
+      continue;
+    }
     const key = config.analysisType === "trend"
       ? timeBucket(record[config.timeField], config.timeGrain)
       : stableValue(record[config.groupField]);
@@ -298,11 +381,20 @@ export function executeBusinessAnalysis(profile: DatasetProfile, config: Busines
     const entity = stableValue(record[config.entityField]);
     if (!entity) excludedMissingEntities += 1;
     const current = groups.get(key) ?? {
-      sourceRows: 0, entities: new Set<string>(), validEntities: new Set<string>(), sum: 0, validValues: 0, invalidValues: 0,
+      sourceRows: 0, entities: new Set<string>(), validEntities: new Set<string>(), successfulEntities: new Set<string>(), sum: 0, validValues: 0, invalidValues: 0,
     };
     current.sourceRows += 1;
     if (entity) current.entities.add(entity);
-    if (config.aggregation !== "count_distinct") {
+    if (config.aggregation === "ratio" && entity) {
+      const success = matchesRatioRule(record, config.ratioNumerator);
+      const previous = ratioEntities.get(entity);
+      if (previous && (previous.key !== key || previous.success !== success)) {
+        throw new Error("同一订单存在不同地区或相互冲突的成功状态。请先确认订单的最终状态和地区，再计算比例。");
+      }
+      ratioEntities.set(entity, { key, success });
+      if (success) current.successfulEntities.add(entity);
+    }
+    if (["sum", "average"].includes(config.aggregation)) {
       const numeric = finiteNumber(record[config.valueField]);
       if (numeric === null || (config.aggregation === "average" && !entity)) {
         current.invalidValues += 1;
@@ -318,6 +410,7 @@ export function executeBusinessAnalysis(profile: DatasetProfile, config: Busines
 
   const allRows = [...groups.entries()].map(([key, group]) => {
     const value = config.aggregation === "count_distinct" ? group.entities.size
+      : config.aggregation === "ratio" ? (group.entities.size ? group.successfulEntities.size / group.entities.size : Number.NaN)
       : config.aggregation === "sum" ? (group.validValues ? group.sum : Number.NaN)
         : group.validEntities.size ? group.sum / group.validEntities.size : Number.NaN;
     return {
@@ -326,6 +419,7 @@ export function executeBusinessAnalysis(profile: DatasetProfile, config: Busines
       sourceRows: group.sourceRows,
       distinctEntities: group.entities.size,
       excludedInvalidValues: group.invalidValues,
+      ...(config.aggregation === "ratio" ? { numerator: group.successfulEntities.size, denominator: group.entities.size } : {}),
     };
   });
   const finiteRows = allRows.filter((row) => Number.isFinite(row.value));
@@ -333,7 +427,7 @@ export function executeBusinessAnalysis(profile: DatasetProfile, config: Busines
     ? finiteRows.sort((left, right) => left.key.localeCompare(right.key))
     : finiteRows.sort((left, right) => {
       const delta = config.sortDirection === "desc" ? right.value - left.value : left.value - right.value;
-      return delta || left.key.localeCompare(right.key);
+      return delta || (config.aggregation === "ratio" ? (left.key < right.key ? -1 : left.key > right.key ? 1 : 0) : left.key.localeCompare(right.key));
     });
   const rows = config.analysisType === "top_n" ? sorted.slice(0, config.limit) : sorted;
   const reconciledRows = [...groups.values()].reduce((sum, group) => sum + group.sourceRows, 0);
@@ -341,16 +435,18 @@ export function executeBusinessAnalysis(profile: DatasetProfile, config: Busines
     ? rows[index - 1].key.localeCompare(row.key) <= 0
     : config.sortDirection === "desc" ? rows[index - 1].value >= row.value : rows[index - 1].value <= row.value));
   const checks: BusinessAnalysisCheck[] = [
-    { label: "源数据行数勾稽", passed: eligibleRows + excludedGroupingRows === profile.rowCount && reconciledRows === eligibleRows, detail: `源数据 ${profile.rowCount} 行，进入分组 ${eligibleRows} 行，排除 ${excludedGroupingRows} 行。` },
+    { label: "源数据行数勾稽", passed: eligibleRows + excludedGroupingRows + excludedScopeRows === profile.rowCount && reconciledRows === eligibleRows, detail: `源数据 ${profile.rowCount} 行，进入分组 ${eligibleRows} 行，排除分组 ${excludedGroupingRows} 行，排除分母范围 ${excludedScopeRows} 行。` },
     { label: "结果为有限数值", passed: rows.length > 0 && rows.every((row) => Number.isFinite(row.value)), detail: rows.length ? `输出 ${rows.length} 个有限数值结果。` : "没有可计算的结果。" },
     { label: "结果顺序正确", passed: correctlySorted, detail: config.analysisType === "trend" ? "时间分组按先后顺序排列。" : `结果按数值${config.sortDirection === "desc" ? "降序" : "升序"}排列。` },
   ];
+  if (config.aggregation === "ratio") checks.push({ label: "分子分母及比例边界正确", passed: rows.length > 0 && rows.every(row => (row.denominator ?? 0) > 0 && (row.numerator ?? 0) <= (row.denominator ?? 0) && row.value >= 0 && row.value <= 1), detail: "逐组检查 0 ≤ 成功去重订单数 ≤ 分母去重订单数；分母为零不计为0%。" });
   if (config.analysisType === "top_n") checks.push({ label: "Top N 边界正确", passed: rows.length <= config.limit, detail: `最多输出 ${config.limit} 个分组，实际输出 ${rows.length} 个。` });
   const warnings: string[] = [];
+  if (excludedScopeRows) warnings.push(`${excludedScopeRows} 行不符合已确认的分母范围，未进入分子或分母。`);
   if (excludedGroupingRows > 0) warnings.push(`${excludedGroupingRows} 行分组字段为空或时间无法识别，未进入分析。`);
   if (excludedMissingEntities > 0) warnings.push(`${excludedMissingEntities} 行统计对象为空；去重计数和按对象平均可能受影响。`);
   if (excludedInvalidValues > 0) warnings.push(`${excludedInvalidValues} 行数值缺失、无法转换或缺少统计对象，未进入数值聚合。`);
-  if (allRows.length > finiteRows.length) warnings.push(`${allRows.length - finiteRows.length} 个分组没有有效数值，未展示。`);
+  if (allRows.length > finiteRows.length) warnings.push(`${allRows.length - finiteRows.length} 个分组${config.aggregation === "ratio" ? "分母为零，比例无法计算，未显示为0%" : "没有有效数值，未展示"}。`);
   if (profile.qualityIssues.length > 0) warnings.push(`当前数据仍记录 ${profile.qualityIssues.length} 项质量风险，结论需结合质量处置状态使用。`);
   return {
     rows,
@@ -360,6 +456,7 @@ export function executeBusinessAnalysis(profile: DatasetProfile, config: Busines
     excludedMissingEntities,
     excludedInvalidValues,
     fullGroupCount: finiteRows.length,
+    ...(config.aggregation === "ratio" ? { excludedScopeRows, zeroDenominatorGroups: allRows.filter(row => row.denominator === 0).map(row => row.key) } : {}),
     checks,
     warnings,
     engine: "browser-deterministic",

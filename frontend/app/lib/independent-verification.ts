@@ -14,7 +14,7 @@ export type IndependentVerification = {
   queryParameters?: Array<string | number>;
   checks: IndependentVerificationCheck[];
   referenceValue: number | null;
-  referenceRows: Array<{ key: string; value: number }>;
+  referenceRows: Array<{ key: string; value: number; numerator?: number; denominator?: number }>;
   error: string | null;
 };
 

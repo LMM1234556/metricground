@@ -42,7 +42,9 @@ export type ResultEvidence = {
   numerator?: number | null;
   denominator?: number | null;
   fullGroupCount?: number;
-  groups?: Array<{ key: string; value: number; sourceRows: number; distinctEntities: number; excludedInvalidValues: number }>;
+  excludedScopeRows?: number;
+  zeroDenominatorGroups?: string[];
+  groups?: Array<{ key: string; value: number; sourceRows: number; distinctEntities: number; excludedInvalidValues: number; numerator?: number; denominator?: number }>;
   groupsTruncated?: boolean;
 };
 
