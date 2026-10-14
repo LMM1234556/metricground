@@ -74,6 +74,7 @@ const result = await evaluate(`(async () => {
     hasEvidence: document.querySelectorAll('.quality-issue dt').length >= 3,
     approvalRecorded: document.querySelector('.quality-actions > span')?.textContent?.includes('批准清洗'),
     privacyNote: document.querySelector('.approval-note')?.textContent?.replace(/\\s+/g, ' ').trim(),
+    nextNote: document.querySelector('.profile-next-note')?.textContent?.replace(/\\s+/g, ' ').trim(),
   };
 })()`);
 
@@ -84,7 +85,11 @@ const checks = {
   invalidDateDetected: result.titles.some((title) => title.includes("日期") && title.includes("无法识别")),
   outlierDetected: result.titles.some((title) => title.includes("异常值")),
   evidenceImpactAdviceVisible: result.hasEvidence,
-  approvalRecordedWithoutMutation: result.approvalRecorded && result.privacyNote?.includes("不会修改或覆盖原始文件"),
+  approvalRecordedWithoutMutation: result.approvalRecorded
+    && result.privacyNote?.includes("删行会改变统计范围")
+    && result.nextNote?.includes("质量页只记录判断")
+    && result.nextNote?.includes("二次确认")
+    && result.nextNote?.includes("派生副本"),
   noRuntimeExceptions: runtimeErrors.length === 0,
 };
 
