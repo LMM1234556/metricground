@@ -999,11 +999,16 @@ export default function Home() {
       ? ["orders-primary-key", "review-order-grain", "negative-review-rate-range"]
       : ["orders-primary-key", "items-composite-key", "gmv-reconciliation", "purchase-time"];
   const visibleValidation = snapshot.validation.filter((item) => validationIds.includes(item.id));
-  const isBusinessQualityContext = analysisConfirmationView(agentResponse?.plan ?? businessAnalysisPlan, submittedQuery) === "经营分析";
-  const currentBusinessDraft = businessQualityDraft?.profile === datasetProfile && businessQualityDraft.question === submittedQuery ? businessQualityDraft : null;
+  const activeAnalysisPlan = agentResponse?.plan ?? businessAnalysisPlan;
+  const isBusinessQualityContext = analysisConfirmationView(activeAnalysisPlan, submittedQuery) === "经营分析";
+  const currentBusinessDraft = businessQualityDraft?.profile === datasetProfile
+    && businessQualityDraft.question === submittedQuery
+    && (!activeAnalysisPlan || businessQualityDraft.config.analysisType === activeAnalysisPlan.analysisType)
+    ? businessQualityDraft
+    : null;
   const completedBusinessSpec = taskRun?.state === "COMPLETED" && taskRun.question === submittedQuery && isBusinessQualityContext ? taskRun.analysisSpec : null;
   const businessQualityConfig = datasetProfile && isBusinessQualityContext ? currentBusinessDraft?.config
-    ?? (completedBusinessSpec ? businessQualityConfigFromSpec(completedBusinessSpec) : createBusinessAnalysisConfig(datasetProfile, agentResponse?.plan ?? businessAnalysisPlan, submittedQuery)) : null;
+    ?? (completedBusinessSpec ? businessQualityConfigFromSpec(completedBusinessSpec) : createBusinessAnalysisConfig(datasetProfile, activeAnalysisPlan, submittedQuery)) : null;
   const qualityScopeConfirmed = isBusinessQualityContext ? (currentBusinessDraft ? currentBusinessDraft.confirmed : Boolean(completedBusinessSpec)) : Boolean(metricDraft?.grainConfirmed);
   const metricQualityImpact = datasetProfile && businessQualityConfig
     ? businessQualityReview(datasetProfile, businessQualityConfig, submittedQuery, qualityScopeConfirmed)
