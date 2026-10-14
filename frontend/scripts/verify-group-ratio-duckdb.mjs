@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 import path from "node:path";
 import readXlsxFile from "read-excel-file/node";
 import { profileRows } from "../app/lib/tabular-profile.ts";
@@ -55,7 +56,8 @@ verify(profile, { ...config, sortDirection: "asc" });
 verify(profile, { ...config, ratioDenominator: { enabled: true, field: "status", operator: "not_equals", value: "cancelled" } });
 verify(profile, { ...config, ratioNumerator: { ...config.ratioNumerator, value: "' OR 1=1 --" } });
 verify(profile, { ...config, ratioNumerator: { ...config.ratioNumerator, operator: "not_empty", value: "" } });
-const [sheet] = await readXlsxFile("E:/简历/agent_projects/metricground-olist-agent/evaluation/novice_test_files/novice_test_p04.xlsx", { sheet: "orders" });
+const fixturePath = fileURLToPath(new URL("../../evaluation/novice_test_files/novice_test_p04.xlsx", import.meta.url));
+const [sheet] = await readXlsxFile(fixturePath, { sheet: "orders" });
 const original = profileRows(sheet.data, { ...metadata, fileName: "novice_test_p04.xlsx" });
 const participant = verify(original, { ...config, ratioNumerator: { ...config.ratioNumerator, value: "已送达" } });
 conn.close();

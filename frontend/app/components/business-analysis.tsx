@@ -20,7 +20,7 @@ type Props = {
   qualityGate?: ExecutionGate;
   onExecution?: (event: BusinessAnalysisLifecycleEvent) => void;
   initialConfig?: BusinessAnalysisConfig;
-  onConfigChange?: (config: BusinessAnalysisConfig, confirmed: boolean) => void;
+  onConfigChange?: (config: BusinessAnalysisConfig, confirmed: boolean, question: string) => void;
 };
 
 export type BusinessAnalysisLifecycleEvent =
@@ -52,7 +52,7 @@ export default function BusinessAnalysis({ profile, agentPlan, question, quality
     ? profile.joinAmountReconciliations?.find((item) => item.qualifiedField === config.valueField && item.status !== "balanced") ?? null
     : null;
 
-  useEffect(() => { onConfigChange?.(config, confirmed); }, [config, confirmed, onConfigChange]);
+  useEffect(() => { onConfigChange?.(config, confirmed, question); }, [config, confirmed, onConfigChange, question]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {

@@ -285,9 +285,9 @@ export default function Home() {
   const [profileView, setProfileView] = useState<ProfileView>("画像");
   const [qualityDecisions, setQualityDecisions] = useState<Record<string, QualityDecision>>({});
   const [businessQualityDraft, setBusinessQualityDraft] = useState<{ profile: DatasetProfile; question: string; config: BusinessAnalysisConfig; confirmed: boolean } | null>(null);
-  const handleBusinessConfigChange = useCallback((config: BusinessAnalysisConfig, confirmed: boolean) => {
-    if (datasetProfile) setBusinessQualityDraft({ profile: datasetProfile, question: submittedQuery, config, confirmed });
-  }, [datasetProfile, submittedQuery]);
+  const handleBusinessConfigChange = useCallback((config: BusinessAnalysisConfig, confirmed: boolean, question: string) => {
+    if (datasetProfile) setBusinessQualityDraft({ profile: datasetProfile, question, config, confirmed });
+  }, [datasetProfile]);
   const [metricDraft, setMetricDraft] = useState<MetricDraft | null>(null);
   const [metricContract, setMetricContract] = useState<MetricContract | null>(null);
   const [executionQualityImpact, setExecutionQualityImpact] = useState<QualityImpactSummary | null>(null);

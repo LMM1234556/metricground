@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { fileURLToPath } from "node:url";
 import readXlsxFile from "read-excel-file/node";
 import { profileRows } from "../app/lib/tabular-profile.ts";
 import { createBusinessAnalysisConfig, executeBusinessAnalysis, buildBusinessAnalysisPlan } from "../app/lib/business-analysis.ts";
@@ -66,7 +67,7 @@ assert.equal(evidence.resultEvidence.groups[0].numerator, 1);
 assert(evidenceAsMarkdown(evidence).includes('"denominator": 2'));
 
 // Replay the supplied participant's original file, not its cleaned subset.
-const fixturePath = "E:/简历/agent_projects/metricground-olist-agent/evaluation/novice_test_files/novice_test_p04.xlsx";
+const fixturePath = fileURLToPath(new URL("../../evaluation/novice_test_files/novice_test_p04.xlsx", import.meta.url));
 const [sheet] = await readXlsxFile(fixturePath, { sheet: "orders" });
 const original = profileRows(sheet.data, { ...metadata, fileName: "novice_test_p04.xlsx", fileType: "Excel", activeSheet: "orders", sheetNames: ["orders"] });
 const originalConfig = { ...createBusinessAnalysisConfig(original, null, question), entityField: "order_id", groupField: "region", ratioNumerator: { ...config.ratioNumerator, value: "已送达" } };

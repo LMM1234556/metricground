@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
+import { fileURLToPath } from 'node:url';
 import readXlsxFile from 'read-excel-file/node';
 import { businessQualityReview } from '../app/lib/business-quality-review.ts';
 import { createBusinessAnalysisConfig } from '../app/lib/business-analysis.ts';
 import { profileRows } from '../app/lib/tabular-profile.ts';
-const [sheet] = await readXlsxFile('E:/简历/agent_projects/metricground-olist-agent/evaluation/novice_test_files/novice_test_p04.xlsx', {sheet:'orders'});
+const fixturePath = fileURLToPath(new URL('../../evaluation/novice_test_files/novice_test_p04.xlsx', import.meta.url));
+const [sheet] = await readXlsxFile(fixturePath, {sheet:'orders'});
 const profile = profileRows(sheet.data, {fileName:'novice_test_p04.xlsx',fileSize:5452,fileType:'Excel',activeSheet:'orders',sheetNames:['orders']});
 const question='比较不同地区的送货成功率';
 const config={...createBusinessAnalysisConfig(profile,null,question),entityField:'order_id',groupField:'region',ratioNumerator:{enabled:true,field:'status',operator:'equals',value:'已送达'}};
