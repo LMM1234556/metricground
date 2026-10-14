@@ -130,7 +130,8 @@ const result = await evaluate(`(async () => {
 
 const checks = {
   metricTabVisible: result.tabs.some((tab) => tab.includes("指标口径")),
-  qualityImpactGuidesNoviceBeforeContract: result.qualityImpactText.includes("按当前口径草案判断")
+  qualityImpactGuidesNoviceBeforeContract: result.qualityImpactText.includes("按候选口径判断")
+    && result.qualityImpactText.includes("更换指标后会自动重新评估")
     && JSON.stringify(result.qualityImpactCounts) === JSON.stringify(["0", "1", "6"]),
   safeRecommendationsRequireOneRemainingHumanDecision: result.qualityProgressAfterRecommendation.includes("已完成 6/7 项")
     && result.qualityProgressAfterRecommendation.includes("还剩 1 项"),

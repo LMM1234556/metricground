@@ -117,11 +117,13 @@ try {
     await wait(() => window.__handoffWrites.some(run => run.question === originalQuestion && run.datasetVersions[0].rowCount === 11 && run.approvals.length === 0), 'Restoration did not reset task approvals');
     text('.query-box textarea', '比较不同地区的送货成功率');
     document.querySelector('.query-box').dispatchEvent(new Event('submit', { bubbles:true, cancelable:true }));
-    await wait(() => document.querySelector('.agent-plan-card.unsupported'), 'Grouped ratio not explicitly unsupported');
+    await wait(() => document.querySelector('.agent-plan-card.clarify'), 'Grouped ratio clarification missing');
+    const ratePlanClarifies = document.querySelector('.agent-plan-card.clarify')?.textContent.includes('确认成功条件和分母范围');
     click('.profile-tabs button', '经营分析'); await sleep(200);
+    const rateAggregationSelected = document.querySelector('select[aria-label="聚合口径"]')?.value === 'ratio';
     const rateCannotExecute = document.querySelector('.business-analysis-workbench .execution-approval button').disabled;
-    const rateExplained = document.querySelector('.execution-plan-error')?.textContent.includes('比例');
-    return { afterQuality, afterClean, draftAnswersQuestion, parentId, confirmationReset, blockedBeforeScope, scopeText, persisted, persistedStatus:persistedResponse.status, nameConflict, originalGoalConflict, conflictDidNotCreateContract, originalScopeWarning, restoreDiscoverable, restoredRows, rateCannotExecute, rateExplained };
+    const rateExplained = document.querySelector('.execution-plan-error')?.textContent.includes('请确认分子的比较值');
+    return { afterQuality, afterClean, draftAnswersQuestion, parentId, confirmationReset, blockedBeforeScope, scopeText, persisted, persistedStatus:persistedResponse.status, nameConflict, originalGoalConflict, conflictDidNotCreateContract, originalScopeWarning, restoreDiscoverable, restoredRows, ratePlanClarifies, rateAggregationSelected, rateCannotExecute, rateExplained };
   })()`);
   assert.equal(result.afterQuality.trim(), "经营分析");
   assert.equal(result.afterClean.trim(), "经营分析");
@@ -136,10 +138,10 @@ try {
   assert(result.nameConflict && result.originalGoalConflict && result.conflictDidNotCreateContract);
   assert(result.originalScopeWarning && result.restoreDiscoverable);
   assert.equal(result.restoredRows, 11);
-  assert(result.rateCannotExecute && result.rateExplained);
+  assert(result.ratePlanClarifies && result.rateAggregationSelected && result.rateCannotExecute && result.rateExplained);
   const evidence = buildEvidencePackage(result.persisted);
   assert(verifyEvidencePackage(evidence));
   assert(evidenceAsMarkdown(evidence).includes("数据范围变化与确认"));
   assert.deepEqual(errors, []);
-  console.log(JSON.stringify({ passed:true, qualityRoutesToComparison:true, cleaningPreservesQuestion:true, changedScopeBlockedUntilConfirmed:true, contractNameAndGoalConflictsBlocked:true, evidenceVersion:evidence.version, runtimeErrors:errors, source:"Local policy route; no cloud requests" }, null, 2));
+  console.log(JSON.stringify({ passed:true, qualityRoutesToComparison:true, cleaningPreservesQuestion:true, changedScopeBlockedUntilConfirmed:true, contractNameAndGoalConflictsBlocked:true, groupedRatioRequiresExplicitDefinition:true, evidenceVersion:evidence.version, runtimeErrors:errors, source:"Local policy route; no cloud requests" }, null, 2));
 } finally { socket.close(); }

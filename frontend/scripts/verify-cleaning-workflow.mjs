@@ -141,8 +141,10 @@ const result = await evaluate(`(async () => {
 const sourceHashAfter = createHash("sha256").update(await readFile(fixture)).digest("hex");
 const checks = {
   fourSafeRulesOffered: result.optionCount === 4,
-  previewReconciles: JSON.stringify(result.preview) === JSON.stringify(["11 行", "4 行", "7 行", "7 → 0"]),
-  skippedCheckIsNotReportedAsResolved: result.previewWarning.includes("IQR 异常检查将不运行") && result.previewWarning.includes("不代表异常值已解决"),
+  previewReconciles: JSON.stringify(result.preview.slice(0, 4)) === JSON.stringify(["11 行", "4 行", "7 行", "7 → 0"])
+    && result.preview.includes("10 → 7"),
+  skippedCheckIsNotReportedAsResolved: result.qualityEmpty.includes("检查因样本不足未运行")
+    && result.qualityEmpty.includes("不代表相关风险已经消失"),
   secondConfirmationRequired: result.disabledBeforeConfirm === true,
   derivedVersionVisible: result.status.includes("orders_quality_sample-cleaned.csv") && result.status.includes("7 行"),
   qualityRerunCompleted: result.qualityTabText === "质量检查" && result.qualityEmpty.includes("已运行的基础检查未发现明显问题") && result.qualityEmpty.includes("检查因样本不足未运行"),

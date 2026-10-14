@@ -144,6 +144,27 @@ const inspectResult = await evaluate(`(async () => {
     return { rows, csv, fileName: window.__csvFileName, tab, reopened: Boolean(document.querySelector('.dataset-result-table')), emptyCell: Boolean(document.querySelector('.empty-cell [aria-label="空值"]')) };
   } finally { URL.createObjectURL = createObjectURL; HTMLAnchorElement.prototype.click = click; }
 })()`);
+await evaluate(`(async () => {
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const readSnapshot = () => new Promise((resolve, reject) => {
+    const request = indexedDB.open('metricground-workspace', 1);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result;
+      const tx = db.transaction('sessions', 'readonly');
+      const get = tx.objectStore('sessions').get('active');
+      get.onsuccess = () => { db.close(); resolve(get.result); };
+      get.onerror = () => { db.close(); reject(get.error); };
+    };
+  });
+  const deadline = Date.now() + 10000;
+  while (Date.now() <= deadline) {
+    const snapshot = await readSnapshot();
+    if (snapshot?.datasetProfile?.fileName === 'join_orders_sample-join_items_sample-joined.csv' && snapshot.profileView === '结果明细') return;
+    await sleep(100);
+  }
+  throw new Error('Derived workspace snapshot not saved before reload');
+})()`);
 await command('Page.reload', { ignoreCache: true });
 await waitFor('.dataset-result-table', 15000);
 const restored = await evaluate(`({ rows: document.querySelectorAll('.dataset-result-table tbody tr').length, actions: document.querySelector('.derived-result-actions')?.textContent, tab: document.querySelector('[role="tab"][aria-selected="true"]')?.textContent.trim() })`);
